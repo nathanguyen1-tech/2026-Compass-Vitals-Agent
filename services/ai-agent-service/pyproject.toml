@@ -1,0 +1,66 @@
+[project]
+name = "ai-agent-service"
+version = "0.1.0"
+description = "Compass Vitals AI Agent Service — Multi-agent clinical workflow orchestration"
+requires-python = ">=3.12"
+
+dependencies = [
+    # Web Framework
+    "fastapi[standard]>=0.115.0",
+    "uvicorn[standard]>=0.34.0",
+
+    # AI / LLM
+    "langgraph>=0.2.0",
+    "langchain-core>=0.3.0",
+    "langchain-openai>=0.3.0",
+    "openai>=1.60.0",
+
+    # Database
+    "sqlalchemy[asyncio]>=2.0.36",
+    "asyncpg>=0.30.0",
+    "alembic>=1.14.0",
+
+    # Cache
+    "redis>=5.2.0",
+
+    # Security
+    "cryptography>=44.0.0",
+    "python-jose[cryptography]>=3.3.0",
+
+    # Validation
+    "pydantic>=2.10.0",
+    "pydantic-settings>=2.7.0",
+
+    # Observability
+    "structlog>=24.4.0",
+
+    # Utilities
+    "httpx>=0.28.0",
+    "tenacity>=9.0.0",
+    "circuitbreaker>=2.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.24.0",
+    "pytest-cov>=6.0.0",
+    "httpx>=0.28.0",
+    "ruff>=0.8.0",
+    "mypy>=1.13.0",
+]
+
+[build-system]
+requires = ["setuptools>=70.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 120
