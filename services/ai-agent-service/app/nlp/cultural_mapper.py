@@ -105,7 +105,7 @@ class CulturalMapper:
             logger.info(
                 "cultural_expression.detected",
                 count=len(found),
-                expressions=[f["original"] for f in found],
+                expressions=[f["medical_terms"][0] for f in found],
             )
 
         return found

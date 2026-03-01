@@ -1,13 +1,17 @@
 """FastAPI app — AI Agent Service entry point."""
 
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 import structlog
 from fastapi import FastAPI
-from fastapi.responses import JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
 from app.core.exceptions import CompassBaseException, ClinicalSafetyError
+
+STATIC_DIR = Path(__file__).parent / "static"
 
 logger = structlog.get_logger()
 
@@ -57,6 +61,12 @@ async def compass_exception_handler(request, exc: CompassBaseException):
 @app.get("/health")
 async def health_check():
     return {"status": "healthy", "service": settings.service_name}
+
+
+@app.get("/", response_class=HTMLResponse)
+async def chat_ui():
+    """Serve the chat UI."""
+    return (STATIC_DIR / "chat.html").read_text(encoding="utf-8")
 
 
 # Import and register routers after app creation to avoid circular imports

@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Compass Vitals — Intake Agent Chat</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f0f2f5;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Header */
+        .header {
+            background: linear-gradient(135deg, #0066cc, #004999);
+            color: white;
+            padding: 16px 24px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        }
+        .header-icon {
+            width: 40px; height: 40px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 20px;
+        }
+        .header-info h1 { font-size: 18px; font-weight: 600; }
+        .header-info p { font-size: 12px; opacity: 0.85; }
+        .header-status {
+            margin-left: auto;
+            display: flex; align-items: center; gap: 6px;
+            font-size: 12px;
+        }
+        .status-dot {
+            width: 8px; height: 8px;
+            background: #4caf50;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        /* Chat Area */
+        .chat-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .message {
+            max-width: 75%;
+            padding: 12px 16px;
+            border-radius: 18px;
+            line-height: 1.5;
+            font-size: 14px;
+            position: relative;
+            animation: fadeIn 0.3s ease;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .message.bot {
+            align-self: flex-start;
+            background: white;
+            color: #1a1a1a;
+            border-bottom-left-radius: 4px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .message.user {
+            align-self: flex-end;
+            background: #0066cc;
+            color: white;
+            border-bottom-right-radius: 4px;
+        }
+
+        /* Metadata badge */
+        .meta-bar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-top: 8px;
+            padding-top: 8px;
+            border-top: 1px solid rgba(0,0,0,0.08);
+        }
+        .badge {
+            font-size: 11px;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-weight: 500;
+        }
+        .badge-lang { background: #e3f2fd; color: #1565c0; }
+        .badge-state { background: #f3e5f5; color: #7b1fa2; }
+        .badge-emergency { background: #ffebee; color: #c62828; font-weight: 700; }
+        .badge-cultural { background: #fff3e0; color: #e65100; }
+        .badge-complete { background: #e8f5e9; color: #2e7d32; }
+
+        /* Typing indicator */
+        .typing {
+            align-self: flex-start;
+            background: white;
+            padding: 12px 20px;
+            border-radius: 18px;
+            border-bottom-left-radius: 4px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            display: none;
+        }
+        .typing span {
+            display: inline-block;
+            width: 8px; height: 8px;
+            background: #bbb;
+            border-radius: 50%;
+            margin: 0 2px;
+            animation: bounce 1.4s infinite;
+        }
+        .typing span:nth-child(2) { animation-delay: 0.2s; }
+        .typing span:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes bounce {
+            0%, 60%, 100% { transform: translateY(0); }
+            30% { transform: translateY(-6px); }
+        }
+
+        /* Input area */
+        .input-area {
+            background: white;
+            padding: 16px 24px;
+            border-top: 1px solid #e0e0e0;
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+        .input-area input {
+            flex: 1;
+            padding: 12px 16px;
+            border: 2px solid #e0e0e0;
+            border-radius: 24px;
+            font-size: 14px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        .input-area input:focus { border-color: #0066cc; }
+        .input-area input::placeholder { color: #999; }
+
+        .send-btn {
+            width: 44px; height: 44px;
+            background: #0066cc;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 18px;
+            display: flex; align-items: center; justify-content: center;
+            transition: background 0.2s, transform 0.1s;
+        }
+        .send-btn:hover { background: #0055aa; }
+        .send-btn:active { transform: scale(0.95); }
+        .send-btn:disabled { background: #ccc; cursor: not-allowed; }
+
+        /* Session info bar */
+        .session-bar {
+            background: #fafafa;
+            padding: 6px 24px;
+            font-size: 11px;
+            color: #888;
+            border-top: 1px solid #eee;
+            display: flex;
+            justify-content: space-between;
+        }
+        .session-bar button {
+            background: none;
+            border: none;
+            color: #0066cc;
+            cursor: pointer;
+            font-size: 11px;
+        }
+        .session-bar button:hover { text-decoration: underline; }
+
+        /* Welcome card */
+        .welcome {
+            text-align: center;
+            padding: 40px 20px;
+            color: #666;
+        }
+        .welcome h2 { color: #333; margin-bottom: 8px; font-size: 20px; }
+        .welcome p { font-size: 14px; margin-bottom: 16px; }
+        .welcome .suggestions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            justify-content: center;
+        }
+        .suggestion-chip {
+            background: white;
+            border: 1px solid #ddd;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.2s;
+            color: #333;
+        }
+        .suggestion-chip:hover {
+            border-color: #0066cc;
+            color: #0066cc;
+            background: #f0f7ff;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Header -->
+    <div class="header">
+        <div class="header-icon">&#9764;</div>
+        <div class="header-info">
+            <h1>Compass Vitals — Intake Agent</h1>
+            <p>AI-Powered Vietnamese-American Telehealth</p>
+        </div>
+        <div class="header-status">
+            <div class="status-dot"></div>
+            Online
+        </div>
+    </div>
+
+    <!-- Chat Messages -->
+    <div class="chat-container" id="chatContainer">
+        <div class="welcome" id="welcome">
+            <h2>Xin ch&#224;o! &#128075;</h2>
+            <p>T&#244;i l&#224; Intake Agent c&#7911;a Compass Vitals.<br>H&#227;y m&#244; t&#7843; tri&#7879;u ch&#7913;ng c&#7911;a b&#7841;n &#273;&#7875; b&#7855;t &#273;&#7847;u.</p>
+            <div class="suggestions">
+                <div class="suggestion-chip" onclick="sendSuggestion(this)">T&#244;i b&#7883; &#273;au b&#7909;ng 2 ng&#224;y r&#7891;i</div>
+                <div class="suggestion-chip" onclick="sendSuggestion(this)">I have a headache and fever</div>
+                <div class="suggestion-chip" onclick="sendSuggestion(this)">T&#244;i b&#7883; n&#243;ng trong ng&#432;&#7901;i</div>
+                <div class="suggestion-chip" onclick="sendSuggestion(this)">T&#244;i b&#7883; &#273;au ng&#7921;c, kh&#243; th&#7903;</div>
+            </div>
+        </div>
+        <div class="typing" id="typing">
+            <span></span><span></span><span></span>
+        </div>
+    </div>
+
+    <!-- Session Bar -->
+    <div class="session-bar">
+        <span id="sessionInfo">Session: ch&#432;a k&#7871;t n&#7889;i</span>
+        <button onclick="resetSession()">Phi&#234;n m&#7899;i</button>
+    </div>
+
+    <!-- Input -->
+    <div class="input-area">
+        <input
+            type="text"
+            id="messageInput"
+            placeholder="Nh&#7853;p tri&#7879;u ch&#7913;ng c&#7911;a b&#7841;n..."
+            autocomplete="off"
+            onkeydown="if(event.key==='Enter') sendMessage()"
+        />
+        <button class="send-btn" id="sendBtn" onclick="sendMessage()">&#10148;</button>
+    </div>
+
+    <script>
+        const API_URL = '/api/v1/chat';
+        let sessionId = null;
+
+        const chatContainer = document.getElementById('chatContainer');
+        const messageInput = document.getElementById('messageInput');
+        const sendBtn = document.getElementById('sendBtn');
+        const typingEl = document.getElementById('typing');
+        const welcomeEl = document.getElementById('welcome');
+        const sessionInfo = document.getElementById('sessionInfo');
+
+        function sendSuggestion(el) {
+            messageInput.value = el.textContent;
+            sendMessage();
+        }
+
+        function addMessage(text, sender, metadata) {
+            // Hide welcome on first message
+            if (welcomeEl) welcomeEl.style.display = 'none';
+
+            const div = document.createElement('div');
+            div.className = `message ${sender}`;
+
+            // Main text
+            const textNode = document.createElement('div');
+            textNode.textContent = text;
+            div.appendChild(textNode);
+
+            // Metadata badges (bot only)
+            if (sender === 'bot' && metadata) {
+                const metaBar = document.createElement('div');
+                metaBar.className = 'meta-bar';
+
+                if (metadata.detected_language) {
+                    const langLabel = {vi: 'Vietnamese', en: 'English', mixed: 'Mixed VI/EN'};
+                    metaBar.innerHTML += `<span class="badge badge-lang">${langLabel[metadata.detected_language] || metadata.detected_language}</span>`;
+                }
+                if (metadata.agent_state) {
+                    metaBar.innerHTML += `<span class="badge badge-state">${metadata.agent_state}</span>`;
+                }
+                if (metadata.is_emergency) {
+                    metaBar.innerHTML += `<span class="badge badge-emergency">&#9888; EMERGENCY</span>`;
+                }
+                if (metadata.is_complete) {
+                    metaBar.innerHTML += `<span class="badge badge-complete">&#10003; Complete</span>`;
+                }
+                if (metadata.cultural_expressions && metadata.cultural_expressions.length > 0) {
+                    metadata.cultural_expressions.forEach(expr => {
+                        const terms = expr.medical_terms ? expr.medical_terms.join(', ') : '';
+                        metaBar.innerHTML += `<span class="badge badge-cultural">${expr.expression || ''} → ${terms}</span>`;
+                    });
+                }
+
+                if (metaBar.children.length > 0) {
+                    div.appendChild(metaBar);
+                }
+            }
+
+            // Insert before typing indicator
+            chatContainer.insertBefore(div, typingEl);
+            scrollToBottom();
+        }
+
+        function scrollToBottom() {
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        function setLoading(loading) {
+            typingEl.style.display = loading ? 'block' : 'none';
+            sendBtn.disabled = loading;
+            messageInput.disabled = loading;
+            if (loading) scrollToBottom();
+        }
+
+        async function sendMessage() {
+            const text = messageInput.value.trim();
+            if (!text) return;
+
+            // Add user message
+            addMessage(text, 'user');
+            messageInput.value = '';
+            setLoading(true);
+
+            try {
+                const body = {
+                    message: text,
+                    language: 'auto',
+                };
+                if (sessionId) body.session_id = sessionId;
+
+                const res = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body),
+                });
+
+                if (!res.ok) {
+                    const err = await res.json().catch(() => ({}));
+                    throw new Error(err.error?.message || `HTTP ${res.status}`);
+                }
+
+                const data = await res.json();
+
+                // Save session
+                sessionId = data.session_id;
+                sessionInfo.textContent = `Session: ${sessionId.substring(0, 8)}...`;
+
+                // Add bot response
+                addMessage(data.response, 'bot', {
+                    detected_language: data.detected_language,
+                    agent_state: data.agent_state,
+                    is_emergency: data.is_emergency,
+                    is_complete: data.is_complete,
+                    cultural_expressions: data.cultural_expressions,
+                });
+
+            } catch (err) {
+                addMessage(`Error: ${err.message}`, 'bot');
+            } finally {
+                setLoading(false);
+                messageInput.focus();
+            }
+        }
+
+        function resetSession() {
+            sessionId = null;
+            sessionInfo.textContent = 'Session: ch\u01B0a k\u1EBFt n\u1ED1i';
+            // Clear messages
+            const messages = chatContainer.querySelectorAll('.message');
+            messages.forEach(m => m.remove());
+            // Show welcome
+            if (welcomeEl) welcomeEl.style.display = 'block';
+        }
+
+        // Auto-focus
+        messageInput.focus();
+    </script>
+</body>
+</html>
