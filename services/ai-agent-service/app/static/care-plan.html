@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Compass Vitals — Care Plan</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f0f2f5; min-height: 100vh; }
+
+        .nav { background: #1a1a2e; padding: 8px 24px; display: flex; gap: 16px; align-items: center; }
+        .nav a { color: #aaa; text-decoration: none; font-size: 13px; padding: 4px 12px; border-radius: 4px; }
+        .nav a:hover, .nav a.active { color: white; background: rgba(255,255,255,0.1); }
+        .nav-brand { color: white; font-weight: 700; font-size: 14px; margin-right: 16px; }
+
+        .header { background: linear-gradient(135deg, #2e7d32, #1b5e20); color: white; padding: 24px; }
+        .header h1 { font-size: 22px; margin-bottom: 4px; }
+        .header-meta { display: flex; gap: 16px; font-size: 12px; opacity: 0.9; margin-top: 8px; }
+        .header-meta span { display: flex; align-items: center; gap: 4px; }
+
+        .content { max-width: 800px; margin: 0 auto; padding: 24px; }
+
+        .section { margin-bottom: 24px; }
+        .section-title { font-size: 14px; font-weight: 700; color: #333; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px; padding-bottom: 6px; border-bottom: 2px solid #e0e0e0; display: flex; align-items: center; gap: 8px; }
+        .section-title-vi { font-size: 12px; color: #888; font-weight: 400; text-transform: none; }
+
+        /* Severity banner */
+        .severity-banner { padding: 12px 18px; border-radius: 10px; margin-bottom: 20px; display: flex; align-items: center; gap: 10px; font-weight: 600; }
+        .severity-emergency { background: #ffebee; color: #c62828; border-left: 4px solid #c62828; }
+        .severity-urgent { background: #fff3e0; color: #e65100; border-left: 4px solid #e65100; }
+        .severity-routine { background: #e8f5e9; color: #2e7d32; border-left: 4px solid #2e7d32; }
+
+        /* Diagnosis */
+        .dx-card { background: white; border-radius: 10px; padding: 16px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+        .dx-primary { font-size: 16px; font-weight: 600; color: #333; margin-bottom: 12px; }
+        .dx-primary small { font-weight: 400; color: #888; }
+        .dx-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; }
+        .dx-rank { width: 22px; height: 22px; border-radius: 50%; background: #e3f2fd; color: #0066cc; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+        .dx-name { flex: 1; font-size: 13px; }
+        .dx-bar { width: 120px; height: 6px; background: #e0e0e0; border-radius: 3px; }
+        .dx-bar-fill { height: 100%; border-radius: 3px; }
+        .dx-bar-fill.high { background: #f44336; }
+        .dx-bar-fill.med { background: #ff9800; }
+        .dx-bar-fill.low { background: #4caf50; }
+        .dx-pct { font-size: 12px; color: #888; width: 36px; text-align: right; }
+
+        /* Med card */
+        .med-card { background: white; border-radius: 10px; padding: 14px 16px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); margin-bottom: 10px; border-left: 3px solid #e65100; }
+        .med-name { font-size: 15px; font-weight: 600; color: #333; }
+        .med-name small { font-weight: 400; color: #888; font-size: 12px; }
+        .med-details { display: flex; gap: 16px; margin-top: 6px; font-size: 12px; color: #555; flex-wrap: wrap; }
+        .med-details span { display: flex; align-items: center; gap: 3px; }
+        .med-rationale { font-size: 12px; color: #888; margin-top: 6px; font-style: italic; }
+
+        /* Lab/Imaging */
+        .order-card { background: white; border-radius: 10px; padding: 12px 16px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); margin-bottom: 8px; display: flex; align-items: center; gap: 10px; }
+        .order-icon { font-size: 20px; }
+        .order-name { font-size: 13px; font-weight: 600; color: #333; }
+        .order-name small { font-weight: 400; color: #888; display: block; }
+        .order-urgency { margin-left: auto; font-size: 11px; padding: 2px 8px; border-radius: 8px; font-weight: 600; }
+        .urgency-stat { background: #ffebee; color: #c62828; }
+        .urgency-routine { background: #e8f5e9; color: #2e7d32; }
+
+        /* Monitoring */
+        .monitor-card { background: white; border-radius: 10px; padding: 16px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+        .warning-list { list-style: none; margin-top: 8px; }
+        .warning-list li { padding: 4px 0; font-size: 13px; color: #c62828; display: flex; align-items: center; gap: 6px; }
+        .warning-list li::before { content: "&#9888;"; }
+        .instructions { font-size: 13px; color: #555; margin-top: 10px; line-height: 1.6; }
+
+        /* Safety */
+        .safety-card { background: white; border-radius: 10px; padding: 16px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+        .safety-score { font-size: 28px; font-weight: 700; }
+        .safety-score.good { color: #2e7d32; }
+        .safety-score.warn { color: #e65100; }
+        .safety-score.bad { color: #c62828; }
+        .safety-status { font-size: 14px; font-weight: 600; margin-top: 4px; }
+
+        /* Empty */
+        .empty { text-align: center; padding: 60px 20px; color: #999; font-size: 14px; }
+        .empty a { color: #0066cc; }
+
+        /* Print */
+        .print-bar { text-align: center; margin-top: 20px; padding-bottom: 20px; }
+        .btn { padding: 10px 20px; border: none; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 600; margin: 0 4px; }
+        .btn-outline { background: white; color: #333; border: 1px solid #ddd; }
+        .btn-outline:hover { background: #f5f5f5; }
+
+        @media print {
+            .nav, .print-bar { display: none !important; }
+            body { background: white; }
+            .content { max-width: 100%; }
+        }
+    </style>
+</head>
+<body>
+    <div class="nav">
+        <span class="nav-brand">Compass Vitals</span>
+        <a href="/">Chat</a>
+        <a href="/dashboard" id="navDashboard">Dashboard</a>
+        <a href="/care-plan" class="active" id="navCarePlan">Care Plan</a>
+    </div>
+
+    <div class="header">
+        <h1>&#128203; K&#7871; Ho&#7841;ch Ch&#259;m S&#243;c S&#7913;c Kh&#7887;e / Care Plan</h1>
+        <div class="header-meta">
+            <span id="metaCase">Case: ---</span>
+            <span id="metaDate">Generated: ---</span>
+            <span id="metaStatus">Status: ---</span>
+        </div>
+    </div>
+
+    <div class="content">
+        <div class="empty" id="emptyState">
+            <p>No care plan available yet.<br><a href="/">Start a chat</a> and complete the analysis pipeline first.</p>
+        </div>
+
+        <div id="planContent" style="display:none">
+            <!-- Severity Banner -->
+            <div id="severityBanner" class="severity-banner"></div>
+
+            <!-- Diagnosis Section -->
+            <div class="section">
+                <div class="section-title">&#128300; Ch&#7849;n &#272;o&#225;n <span class="section-title-vi">/ Diagnosis</span></div>
+                <div class="dx-card" id="dxCard"></div>
+            </div>
+
+            <!-- Medications Section -->
+            <div class="section" id="medSection" style="display:none">
+                <div class="section-title">&#128138; Thu&#7889;c <span class="section-title-vi">/ Medications</span></div>
+                <div id="medList"></div>
+            </div>
+
+            <!-- Lab Orders Section -->
+            <div class="section" id="labSection" style="display:none">
+                <div class="section-title">&#129514; X&#233;t Nghi&#7879;m <span class="section-title-vi">/ Lab Orders</span></div>
+                <div id="labList"></div>
+            </div>
+
+            <!-- Imaging Section -->
+            <div class="section" id="imgSection" style="display:none">
+                <div class="section-title">&#128247; H&#236;nh &#7842;nh <span class="section-title-vi">/ Imaging</span></div>
+                <div id="imgList"></div>
+            </div>
+
+            <!-- Monitoring Section -->
+            <div class="section" id="monitorSection" style="display:none">
+                <div class="section-title">&#128197; Theo D&#245;i <span class="section-title-vi">/ Monitoring</span></div>
+                <div class="monitor-card" id="monitorCard"></div>
+            </div>
+
+            <!-- Safety Section -->
+            <div class="section" id="safetySection" style="display:none">
+                <div class="section-title">&#9989; An To&#224;n <span class="section-title-vi">/ Safety Validation</span></div>
+                <div class="safety-card" id="safetyCard"></div>
+            </div>
+
+            <!-- Print -->
+            <div class="print-bar">
+                <button class="btn btn-outline" onclick="window.print()">&#128424; In Care Plan</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const params = new URLSearchParams(window.location.search);
+        const sessionId = params.get('session');
+
+        if (sessionId) {
+            document.getElementById('navDashboard').href = `/dashboard?session=${sessionId}`;
+            document.getElementById('navCarePlan').href = `/care-plan?session=${sessionId}`;
+            loadCarePlan();
+        }
+
+        async function loadCarePlan() {
+            try {
+                const res = await fetch(`/api/v1/flow/${sessionId}/care-plan`);
+                if (!res.ok) return;
+                const cp = await res.json();
+
+                document.getElementById('emptyState').style.display = 'none';
+                document.getElementById('planContent').style.display = 'block';
+
+                // Meta
+                document.getElementById('metaCase').textContent = `Case: ${cp.case_id.substring(0, 8)}...`;
+                document.getElementById('metaDate').textContent = `Generated: ${new Date(cp.generated_at).toLocaleString('vi-VN')}`;
+                document.getElementById('metaStatus').textContent = cp.critic && cp.critic.status === 'approved' ? 'Approved' : 'Pending Review';
+
+                // Severity
+                const banner = document.getElementById('severityBanner');
+                const sevLabels = { emergency: '&#9888; C&#7844;P C&#7912;U / EMERGENCY', urgent: '&#9888; KH&#7848;N C&#7844;P / URGENT', routine: '&#10003; TH&#431;&#7900;NG QUY / ROUTINE' };
+                banner.className = `severity-banner severity-${cp.severity}`;
+                banner.innerHTML = sevLabels[cp.severity] || cp.severity;
+
+                // Diagnoses
+                const dxCard = document.getElementById('dxCard');
+                dxCard.innerHTML = `<div class="dx-primary">${cp.primary_diagnosis} ${cp.primary_diagnosis_vi ? '<small>(' + cp.primary_diagnosis_vi + ')</small>' : ''}</div>`;
+                (cp.differential_diagnoses || []).forEach((dx, i) => {
+                    const barClass = dx.confidence >= 50 ? 'high' : dx.confidence >= 25 ? 'med' : 'low';
+                    dxCard.innerHTML += `
+                        <div class="dx-row">
+                            <span class="dx-rank">${i + 1}</span>
+                            <span class="dx-name">${dx.name} ${dx.name_vi ? '(' + dx.name_vi + ')' : ''}</span>
+                            <div class="dx-bar"><div class="dx-bar-fill ${barClass}" style="width:${dx.confidence}%"></div></div>
+                            <span class="dx-pct">${dx.confidence}%</span>
+                        </div>
+                    `;
+                });
+
+                // Medications
+                if (cp.medications && cp.medications.length > 0) {
+                    document.getElementById('medSection').style.display = 'block';
+                    const list = document.getElementById('medList');
+                    cp.medications.forEach(med => {
+                        list.innerHTML += `
+                            <div class="med-card">
+                                <div class="med-name">${med.drug} <small>${med.drug_vi || ''}</small></div>
+                                <div class="med-details">
+                                    <span>&#128137; ${med.dosage}</span>
+                                    <span>&#128338; ${med.frequency} ${med.frequency_vi ? '(' + med.frequency_vi + ')' : ''}</span>
+                                    <span>&#128197; ${med.duration || 'N/A'}</span>
+                                    <span>&#128204; ${med.route || 'oral'}</span>
+                                </div>
+                                <div class="med-rationale">${med.rationale || ''}</div>
+                            </div>
+                        `;
+                    });
+                }
+
+                // Labs
+                if (cp.lab_orders && cp.lab_orders.length > 0) {
+                    document.getElementById('labSection').style.display = 'block';
+                    const list = document.getElementById('labList');
+                    cp.lab_orders.forEach(lab => {
+                        list.innerHTML += `
+                            <div class="order-card">
+                                <span class="order-icon">&#129514;</span>
+                                <div class="order-name">${lab.test_name} <small>${lab.test_name_vi || ''} &mdash; ${lab.rationale || ''}</small></div>
+                                <span class="order-urgency ${lab.urgency === 'stat' ? 'urgency-stat' : 'urgency-routine'}">${lab.urgency}</span>
+                            </div>
+                        `;
+                    });
+                }
+
+                // Imaging
+                if (cp.imaging_orders && cp.imaging_orders.length > 0) {
+                    document.getElementById('imgSection').style.display = 'block';
+                    const list = document.getElementById('imgList');
+                    cp.imaging_orders.forEach(img => {
+                        list.innerHTML += `
+                            <div class="order-card">
+                                <span class="order-icon">&#128247;</span>
+                                <div class="order-name">${img.imaging_type} <small>${img.imaging_type_vi || ''} &mdash; ${img.rationale || ''}</small></div>
+                                <span class="order-urgency ${img.urgency === 'stat' ? 'urgency-stat' : 'urgency-routine'}">${img.urgency}</span>
+                            </div>
+                        `;
+                    });
+                }
+
+                // Monitoring
+                if (cp.monitoring) {
+                    document.getElementById('monitorSection').style.display = 'block';
+                    const card = document.getElementById('monitorCard');
+                    let html = `<p style="font-size:14px;font-weight:600;">T&#225;i kh&#225;m: ${cp.monitoring.follow_up_interval} ${cp.monitoring.follow_up_interval_vi ? '(' + cp.monitoring.follow_up_interval_vi + ')' : ''}</p>`;
+
+                    if (cp.monitoring.warning_signs && cp.monitoring.warning_signs.length > 0) {
+                        html += '<p style="font-size:13px;font-weight:600;margin-top:10px;color:#c62828;">D&#7845;u hi&#7879;u c&#7847;n &#273;&#7871;n ER ngay:</p><ul class="warning-list">';
+                        cp.monitoring.warning_signs.forEach((sign, i) => {
+                            const signVi = cp.monitoring.warning_signs_vi && cp.monitoring.warning_signs_vi[i] ? ` (${cp.monitoring.warning_signs_vi[i]})` : '';
+                            html += `<li>${sign}${signVi}</li>`;
+                        });
+                        html += '</ul>';
+                    }
+
+                    if (cp.monitoring.instructions) {
+                        html += `<div class="instructions"><strong>Instructions:</strong> ${cp.monitoring.instructions}</div>`;
+                    }
+                    if (cp.monitoring.instructions_vi) {
+                        html += `<div class="instructions"><strong>H&#432;&#7899;ng d&#7851;n:</strong> ${cp.monitoring.instructions_vi}</div>`;
+                    }
+                    card.innerHTML = html;
+                }
+
+                // Safety
+                if (cp.critic) {
+                    document.getElementById('safetySection').style.display = 'block';
+                    const card = document.getElementById('safetyCard');
+                    const scoreClass = cp.critic.safety_score >= 80 ? 'good' : cp.critic.safety_score >= 50 ? 'warn' : 'bad';
+                    card.innerHTML = `
+                        <div style="display:flex;align-items:center;gap:16px;">
+                            <div>
+                                <div class="safety-score ${scoreClass}">${cp.critic.safety_score}/100</div>
+                                <div class="safety-status">${cp.critic.status === 'approved' ? '&#10003; Approved' : '&#9888; ' + cp.critic.status}</div>
+                            </div>
+                            <div style="flex:1;">
+                                <p style="font-size:13px;color:#555;">${cp.critic.summary || ''}</p>
+                                ${cp.critic.summary_vi ? '<p style="font-size:12px;color:#888;margin-top:4px;">' + cp.critic.summary_vi + '</p>' : ''}
+                                ${cp.critic.issues_count > 0 ? '<p style="font-size:12px;color:#e65100;margin-top:4px;">' + cp.critic.issues_count + ' issue(s) identified</p>' : ''}
+                            </div>
+                        </div>
+                    `;
+                }
+
+            } catch (err) { console.error('Failed to load care plan:', err); }
+        }
+    </script>
+</body>
+</html>

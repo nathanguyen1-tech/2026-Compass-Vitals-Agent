@@ -9,7 +9,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
-from app.core.exceptions import CompassBaseException, ClinicalSafetyError
+from app.core.exceptions import CompassBaseException, ClinicalSafetyError, VoiceError
 
 STATIC_DIR = Path(__file__).parent / "static"
 
@@ -41,6 +41,7 @@ async def compass_exception_handler(request, exc: CompassBaseException):
         "LLMError": 503,
         "LLMTimeoutError": 503,
         "LLMRateLimitError": 429,
+        "VoiceError": 502,
     }
     status_code = status_map.get(type(exc).__name__, 500)
 
@@ -69,7 +70,21 @@ async def chat_ui():
     return (STATIC_DIR / "chat.html").read_text(encoding="utf-8")
 
 
+@app.get("/dashboard", response_class=HTMLResponse)
+async def dashboard_ui():
+    """Serve the care flow dashboard."""
+    return (STATIC_DIR / "dashboard.html").read_text(encoding="utf-8")
+
+
+@app.get("/care-plan", response_class=HTMLResponse)
+async def care_plan_ui():
+    """Serve the care plan view."""
+    return (STATIC_DIR / "care-plan.html").read_text(encoding="utf-8")
+
+
 # Import and register routers after app creation to avoid circular imports
-from app.api.v1.routes import chat  # noqa: E402
+from app.api.v1.routes import chat, flow, voice_ws  # noqa: E402
 
 app.include_router(chat.router, prefix="/api/v1", tags=["chat"])
+app.include_router(flow.router, prefix="/api/v1", tags=["flow"])
+app.include_router(voice_ws.router, prefix="/api/v1", tags=["voice"])

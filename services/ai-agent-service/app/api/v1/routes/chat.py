@@ -49,11 +49,13 @@ async def chat(request: ChatRequest):
             "patient_id": str(uuid.uuid4()),  # Stub — will come from auth
             "case_id": str(uuid.uuid4()),
             "organization_id": str(uuid.uuid4()),
-            "intake_data": None,
+            "intake_data": {},
             "intake_complete": False,
             "is_emergency": False,
             "detected_language": "vi",
             "cultural_expressions": [],
+            "voice_transcripts": [],
+            "input_mode": "text",
             "created_at": datetime.now(timezone.utc).isoformat(),
             "updated_at": datetime.now(timezone.utc).isoformat(),
         }

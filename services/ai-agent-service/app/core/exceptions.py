@@ -41,3 +41,7 @@ class LLMRateLimitError(LLMError):
 
 class LLMHallucinationError(LLMError):
     """Phát hiện hallucination trong LLM response."""
+
+
+class VoiceError(CompassBaseException):
+    """Voice processing failures (STT/TTS via Gemini Live)."""

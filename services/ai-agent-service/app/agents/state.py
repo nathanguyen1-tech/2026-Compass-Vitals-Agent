@@ -56,6 +56,9 @@ class CareFlowState(TypedDict):
     detected_language: str
     cultural_expressions: list[dict]
 
+    # === Internal Flow Control ===
+    _critic_loops: int  # Track Critic → Proposer loop iterations
+
     # === Metadata ===
     created_at: str
     updated_at: str
