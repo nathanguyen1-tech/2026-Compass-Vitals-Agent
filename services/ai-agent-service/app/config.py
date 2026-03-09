@@ -37,5 +37,8 @@ class Settings(BaseSettings):
     tts_voice: str = "Kore"
     voice_session_max_minutes: int = 15
 
+    # Ngrok (optional tunneling)
+    ngrok_authtoken: str = ""
+
 
 settings = Settings()

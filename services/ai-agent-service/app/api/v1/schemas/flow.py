@@ -12,6 +12,9 @@ class FlowStatusResponse(BaseModel):
     critic_complete: bool
     critic_approved: bool | None = None
     care_plan_ready: bool
+    clinical_summary_ready: bool = False
+    clinical_summary_v2_ready: bool = False
+    soap_note_ready: bool = False
     is_emergency: bool
     severity: str | None = None
 
@@ -91,3 +94,104 @@ class CarePlanResponse(BaseModel):
     confidence_score: float = 0.0
     detected_language: str = "vi"
     is_emergency: bool = False
+
+
+# ── Clinical Summary schemas ──
+
+
+class OLDCARTSDetail(BaseModel):
+    onset: str = ""
+    location: str = ""
+    duration: str = ""
+    character: str = ""
+    aggravating: str = ""
+    alleviating: str = ""
+    radiation: str = ""
+    timing: str = ""
+    severity: str = ""
+
+
+class ChiefComplaintSection(BaseModel):
+    complaint: str
+    complaint_vi: str = ""
+    oldcarts: OLDCARTSDetail = OLDCARTSDetail()
+    onset_description: str = ""
+
+
+class HPISection(BaseModel):
+    demographics: str = ""
+    demographics_vi: str = ""
+    past_medical_history: str = ""
+    past_medical_history_vi: str = ""
+    surgical_history: str = ""
+    current_medications: str = ""
+    current_medications_vi: str = ""
+    allergies: str = ""
+    allergies_vi: str = ""
+    social_history: str = ""
+    social_history_vi: str = ""
+    family_history: str = ""
+    family_history_vi: str = ""
+
+
+class ROSSystem(BaseModel):
+    system_name: str
+    system_name_vi: str = ""
+    positives: list[str] = []
+    pertinent_negatives: list[str] = []
+    past_similar_episodes: str = ""
+
+
+class ScreeningFinding(BaseModel):
+    """Key finding from screening agent analysis."""
+    clinical_impression: str = ""
+    key_findings: list[str] = []
+    severity: str = ""
+    recommended_urgency: str = ""
+
+
+class ClinicalSummaryResponse(BaseModel):
+    case_id: str
+    session_id: str
+    generated_at: str
+    detected_language: str = "vi"
+
+    chief_complaint: ChiefComplaintSection
+    hpi: HPISection
+    ros: list[ROSSystem] = []
+    cultural_expressions: list[dict] = []
+    is_emergency: bool = False
+    red_flags: list[str] = []
+
+    # Screening results (enrichment from screening agent)
+    screening: ScreeningFinding | None = None
+    differential_diagnoses: list[DiagnosisItem] = []
+    severity: str = ""
+    conversation_summary: str = ""
+
+
+# ── SOAP Note schemas ──
+
+
+class SOAPSection(BaseModel):
+    content: str
+    content_vi: str = ""
+
+
+class SOAPNoteResponse(BaseModel):
+    case_id: str
+    session_id: str
+    generated_at: str
+
+    subjective: SOAPSection
+    objective: SOAPSection
+    assessment: SOAPSection
+    plan: SOAPSection
+
+    severity: str
+    primary_diagnosis: str
+    confidence_score: float = 0.0
+    critic_safety_score: float = 0.0
+    needs_human_review: bool = False
+    human_review_reason: str | None = None
+    safety_concerns: list[str] = []

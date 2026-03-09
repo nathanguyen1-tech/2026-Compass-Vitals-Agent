@@ -17,3 +17,5 @@ class ChatResponse(BaseModel):
     detected_language: str
     is_emergency: bool = False
     cultural_expressions: list[dict] = []
+    intake_progress: float | None = None  # 0.0-1.0 completeness score
+    current_phase: str | None = None  # "cc" | "hpi" | "ros" etc.

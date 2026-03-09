@@ -148,6 +148,9 @@
         <span class="nav-brand">Compass Vitals</span>
         <a href="/" class="active">Chat</a>
         <a href="/dashboard" id="navDashboard">Dashboard</a>
+        <a href="/clinical-summary" id="navClinicalSummary">Clinical Summary</a>
+        <a href="/clinical-summary-v2" id="navSummaryV2">Summary v2</a>
+        <a href="/soap-note" id="navSoapNote">SOAP Note</a>
         <a href="/care-plan" id="navCarePlan">Care Plan</a>
     </div>
 
@@ -226,10 +229,16 @@
         const dashboardLink = document.getElementById('dashboardLink');
         const navDashboard = document.getElementById('navDashboard');
         const navCarePlan = document.getElementById('navCarePlan');
+        const navClinicalSummary = document.getElementById('navClinicalSummary');
+        const navSummaryV2 = document.getElementById('navSummaryV2');
+        const navSoapNote = document.getElementById('navSoapNote');
 
         function updateNavLinks() {
             if (sessionId) {
                 navDashboard.href = `/dashboard?session=${sessionId}`;
+                navClinicalSummary.href = `/clinical-summary?session=${sessionId}`;
+                navSummaryV2.href = `/clinical-summary-v2?session=${sessionId}`;
+                navSoapNote.href = `/soap-note?session=${sessionId}`;
                 navCarePlan.href = `/care-plan?session=${sessionId}`;
             }
         }
@@ -330,9 +339,21 @@
                 const data = await res.json();
                 addSystemMessage(`Analysis complete! Severity: ${(data.severity || 'N/A').toUpperCase()} | Critic: ${data.critic_approved ? 'Approved' : 'Needs Review'}`);
                 if (data.care_plan_ready) {
-                    addSystemMessage('Care Plan ready! Click "Xem Dashboard" or "Care Plan" to view.');
+                    addSystemMessage('Care Plan ready!');
                     dashboardLink.style.display = 'inline';
                     dashboardLink.href = `/dashboard?session=${sessionId}`;
+                    // Show links to all 3 MD views
+                    const viewLinks = [];
+                    if (data.clinical_summary_ready) viewLinks.push(`<a href="/clinical-summary?session=${sessionId}">Clinical Summary</a>`);
+                    if (data.clinical_summary_v2_ready) viewLinks.push(`<a href="/clinical-summary-v2?session=${sessionId}">Summary v2</a>`);
+                    if (data.soap_note_ready) viewLinks.push(`<a href="/soap-note?session=${sessionId}">SOAP Note</a>`);
+                    viewLinks.push(`<a href="/care-plan?session=${sessionId}">Care Plan</a>`);
+                    viewLinks.push(`<a href="/dashboard?session=${sessionId}">Dashboard</a>`);
+                    const linksDiv = document.createElement('div');
+                    linksDiv.className = 'message system-msg';
+                    linksDiv.innerHTML = viewLinks.join(' &bull; ');
+                    chatContainer.insertBefore(linksDiv, typingEl);
+                    scrollToBottom();
                 }
                 analyzeBtn.textContent = 'Done';
             } catch (err) {

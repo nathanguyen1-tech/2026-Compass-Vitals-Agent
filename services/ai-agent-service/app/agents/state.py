@@ -56,6 +56,10 @@ class CareFlowState(TypedDict):
     detected_language: str
     cultural_expressions: list[dict]
 
+    # === Intake Tracking ===
+    intake_tracker: dict | None  # IntakeTracker serialized state
+    existing_history: dict | None  # Pre-existing patient data (PMH, meds, etc.)
+
     # === Internal Flow Control ===
     _critic_loops: int  # Track Critic → Proposer loop iterations
 

@@ -82,6 +82,24 @@ async def care_plan_ui():
     return (STATIC_DIR / "care-plan.html").read_text(encoding="utf-8")
 
 
+@app.get("/clinical-summary", response_class=HTMLResponse)
+async def clinical_summary_ui():
+    """Serve the clinical summary view for MD."""
+    return (STATIC_DIR / "clinical-summary.html").read_text(encoding="utf-8")
+
+
+@app.get("/clinical-summary-v2", response_class=HTMLResponse)
+async def clinical_summary_v2_ui():
+    """Serve the Clinical Summary v2 (LLM-generated narrative) view for MD."""
+    return (STATIC_DIR / "clinical-summary-v2.html").read_text(encoding="utf-8")
+
+
+@app.get("/soap-note", response_class=HTMLResponse)
+async def soap_note_ui():
+    """Serve the SOAP note view for MD."""
+    return (STATIC_DIR / "soap-note.html").read_text(encoding="utf-8")
+
+
 # Import and register routers after app creation to avoid circular imports
 from app.api.v1.routes import chat, flow, voice_ws  # noqa: E402
 

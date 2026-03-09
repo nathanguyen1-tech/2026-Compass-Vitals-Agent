@@ -98,6 +98,9 @@
         <span class="nav-brand">Compass Vitals</span>
         <a href="/">Chat</a>
         <a href="/dashboard" id="navDashboard">Dashboard</a>
+        <a href="/clinical-summary" id="navClinicalSummary">Clinical Summary</a>
+        <a href="/clinical-summary-v2" id="navSummaryV2">Summary v2</a>
+        <a href="/soap-note" id="navSoapNote">SOAP Note</a>
         <a href="/care-plan" class="active" id="navCarePlan">Care Plan</a>
     </div>
 
@@ -168,6 +171,9 @@
 
         if (sessionId) {
             document.getElementById('navDashboard').href = `/dashboard?session=${sessionId}`;
+            document.getElementById('navClinicalSummary').href = `/clinical-summary?session=${sessionId}`;
+            document.getElementById('navSummaryV2').href = `/clinical-summary-v2?session=${sessionId}`;
+            document.getElementById('navSoapNote').href = `/soap-note?session=${sessionId}`;
             document.getElementById('navCarePlan').href = `/care-plan?session=${sessionId}`;
             loadCarePlan();
         }

@@ -1,8 +1,11 @@
 """Flow API endpoints — manage the multi-agent care flow pipeline.
 
-POST /flow/{session_id}/run   — trigger care flow (Screening → Proposer → Critic)
-GET  /flow/{session_id}/status — get current flow state
+POST /flow/{session_id}/run       — trigger care flow (Screening → Proposer → Critic)
+GET  /flow/{session_id}/status    — get current flow state
 GET  /flow/{session_id}/care-plan — get generated care plan
+GET  /flow/{session_id}/clinical-summary — get structured clinical summary for MD
+GET  /flow/{session_id}/clinical-summary-v2 — LLM-generated clinical narrative for MD
+GET  /flow/{session_id}/soap-note — get SOAP note narrative for MD
 """
 
 import structlog
@@ -10,7 +13,16 @@ from fastapi import APIRouter, HTTPException
 
 from app.agents.care_flow_graph import build_care_flow_graph
 from app.agents.care_plan_generator import generate_care_plan
-from app.api.v1.schemas.flow import CarePlanResponse, FlowStatusResponse
+from app.agents.clinical_summary_generator import generate_clinical_summary
+from app.agents.clinical_summary_v2_generator import generate_clinical_summary_v2
+from app.agents.soap_note_generator import generate_soap_note
+from app.api.v1.schemas.clinical_summary_v2 import ClinicalSummaryV2Response
+from app.api.v1.schemas.flow import (
+    CarePlanResponse,
+    ClinicalSummaryResponse,
+    FlowStatusResponse,
+    SOAPNoteResponse,
+)
 from app.config import settings
 from app.domain.services.llm_gateway import LLMGateway
 from app.domain.services.phi_deidentifier import PHIDeidentifier
@@ -81,11 +93,36 @@ async def run_care_flow(session_id: str):
         if key in result:
             session[key] = result[key]
 
-    # Generate care plan if critic approved
+    # Always generate clinical summary after screening (pure Python — no LLM needed)
+    if session.get("screening_result") is not None:
+        clinical_summary = generate_clinical_summary(session, session_id)
+        session["_clinical_summary"] = clinical_summary.model_dump()
+
+        # Generate Clinical Summary v2 (GPT-4 narrative — non-blocking on failure)
+        try:
+            clinical_summary_v2 = await generate_clinical_summary_v2(
+                session, session_id, _gateway, _phi,
+            )
+            session["_clinical_summary_v2"] = clinical_summary_v2.model_dump()
+        except Exception as e:
+            logger.error(
+                "clinical_summary_v2.generation_failed",
+                session_id=session_id,
+                error=str(e),
+            )
+
+    # Generate care plan + SOAP note only if critic approved
     care_plan = None
     if session.get("critic_approved"):
         care_plan = generate_care_plan(session, session_id)
         session["_care_plan"] = care_plan.model_dump()
+
+        # Generate SOAP note (GPT-4 — non-blocking on failure)
+        try:
+            soap_note = await generate_soap_note(session, session_id, _gateway, _phi)
+            session["_soap_note"] = soap_note.model_dump()
+        except Exception as e:
+            logger.error("soap.generation_failed", session_id=session_id, error=str(e))
 
     current_agent = "complete" if session.get("critic_approved") else "critic"
 
@@ -106,6 +143,9 @@ async def run_care_flow(session_id: str):
         critic_complete=session.get("critic_validation") is not None,
         critic_approved=session.get("critic_approved"),
         care_plan_ready=care_plan is not None,
+        clinical_summary_ready="_clinical_summary" in session,
+        clinical_summary_v2_ready="_clinical_summary_v2" in session,
+        soap_note_ready="_soap_note" in session,
         is_emergency=session.get("is_emergency", False),
         severity=session.get("severity"),
     )
@@ -127,6 +167,9 @@ async def get_flow_status(session_id: str):
         critic_complete=session.get("critic_validation") is not None,
         critic_approved=session.get("critic_approved"),
         care_plan_ready="_care_plan" in session,
+        clinical_summary_ready="_clinical_summary" in session,
+        clinical_summary_v2_ready="_clinical_summary_v2" in session,
+        soap_note_ready="_soap_note" in session,
         is_emergency=session.get("is_emergency", False),
         severity=session.get("severity"),
     )
@@ -143,6 +186,77 @@ async def get_care_plan(session_id: str):
         raise HTTPException(status_code=404, detail="Care plan not yet generated — run flow first")
 
     return CarePlanResponse(**session["_care_plan"])
+
+
+@router.get("/flow/{session_id}/clinical-summary", response_model=ClinicalSummaryResponse)
+async def get_clinical_summary(session_id: str):
+    """Get the structured clinical summary (HPI, CC, ROS) for MD review."""
+    session = _sessions.get(session_id)
+    if session is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    if "_clinical_summary" not in session:
+        # Generate on-demand if screening has been done
+        if session.get("screening_result") is None and not session.get("intake_complete"):
+            raise HTTPException(
+                status_code=404,
+                detail="Clinical summary not available — run flow first",
+            )
+        clinical_summary = generate_clinical_summary(session, session_id)
+        session["_clinical_summary"] = clinical_summary.model_dump()
+
+    return ClinicalSummaryResponse(**session["_clinical_summary"])
+
+
+@router.get(
+    "/flow/{session_id}/clinical-summary-v2",
+    response_model=ClinicalSummaryV2Response,
+)
+async def get_clinical_summary_v2(session_id: str):
+    """Get the LLM-generated Clinical Summary v2 (HPI, CC, ROS narratives)."""
+    session = _sessions.get(session_id)
+    if session is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    if "_clinical_summary_v2" not in session:
+        # Generate on-demand if screening has been done
+        if session.get("screening_result") is None and not session.get("intake_complete"):
+            raise HTTPException(
+                status_code=404,
+                detail="Clinical summary v2 not available — run flow first",
+            )
+        if not _gateway or not _phi:
+            raise HTTPException(status_code=503, detail="LLM not configured")
+
+        clinical_summary_v2 = await generate_clinical_summary_v2(
+            session, session_id, _gateway, _phi,
+        )
+        session["_clinical_summary_v2"] = clinical_summary_v2.model_dump()
+
+    return ClinicalSummaryV2Response(**session["_clinical_summary_v2"])
+
+
+@router.get("/flow/{session_id}/soap-note", response_model=SOAPNoteResponse)
+async def get_soap_note(session_id: str):
+    """Get the SOAP note narrative for MD review."""
+    session = _sessions.get(session_id)
+    if session is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    if "_soap_note" not in session:
+        # Generate on-demand if care plan exists
+        if "_care_plan" not in session:
+            raise HTTPException(
+                status_code=404,
+                detail="SOAP note not available — care plan not yet generated",
+            )
+        if not _gateway or not _phi:
+            raise HTTPException(status_code=503, detail="LLM not configured")
+
+        soap_note = await generate_soap_note(session, session_id, _gateway, _phi)
+        session["_soap_note"] = soap_note.model_dump()
+
+    return SOAPNoteResponse(**session["_soap_note"])
 
 
 def _determine_current_agent(session: dict) -> str:

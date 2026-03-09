@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Compass Vitals — Clinical Summary</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f0f2f5; min-height: 100vh; }
+
+        .nav { background: #1a1a2e; padding: 8px 24px; display: flex; gap: 16px; align-items: center; }
+        .nav a { color: #aaa; text-decoration: none; font-size: 13px; padding: 4px 12px; border-radius: 4px; }
+        .nav a:hover, .nav a.active { color: white; background: rgba(255,255,255,0.1); }
+        .nav-brand { color: white; font-weight: 700; font-size: 14px; margin-right: 16px; }
+
+        .header { background: linear-gradient(135deg, #0d47a1, #1565c0); color: white; padding: 24px; }
+        .header h1 { font-size: 22px; margin-bottom: 4px; }
+        .header-meta { display: flex; gap: 16px; font-size: 12px; opacity: 0.9; margin-top: 8px; }
+
+        .content { max-width: 800px; margin: 0 auto; padding: 24px; }
+
+        .section { margin-bottom: 24px; }
+        .section-title { font-size: 14px; font-weight: 700; color: #333; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px; padding-bottom: 6px; border-bottom: 2px solid #1565c0; display: flex; align-items: center; gap: 8px; }
+        .section-title-vi { font-size: 12px; color: #888; font-weight: 400; text-transform: none; }
+
+        .card { background: white; border-radius: 10px; padding: 16px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); margin-bottom: 12px; }
+
+        /* OLDCARTS grid */
+        .oldcarts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .oldcarts-item { background: #f8f9fa; border-radius: 8px; padding: 10px 14px; }
+        .oldcarts-label { font-size: 11px; font-weight: 700; color: #1565c0; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px; }
+        .oldcarts-value { font-size: 13px; color: #333; }
+        .oldcarts-value.empty { color: #bbb; font-style: italic; }
+
+        /* HPI fields */
+        .hpi-row { display: flex; gap: 8px; padding: 8px 0; border-bottom: 1px solid #f0f0f0; align-items: baseline; }
+        .hpi-row:last-child { border-bottom: none; }
+        .hpi-label { width: 160px; font-size: 12px; font-weight: 600; color: #555; flex-shrink: 0; }
+        .hpi-value { font-size: 13px; color: #333; flex: 1; }
+        .hpi-value.empty { color: #bbb; font-style: italic; }
+
+        /* ROS */
+        .ros-card { background: white; border-radius: 10px; padding: 14px 16px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); margin-bottom: 10px; border-left: 3px solid #1565c0; }
+        .ros-system { font-size: 14px; font-weight: 600; color: #333; margin-bottom: 8px; }
+        .ros-system small { font-weight: 400; color: #888; font-size: 12px; }
+        .ros-findings { display: flex; flex-direction: column; gap: 4px; }
+        .ros-pos { font-size: 12px; color: #c62828; display: flex; align-items: center; gap: 4px; }
+        .ros-pos::before { content: "+"; font-weight: 700; width: 16px; }
+        .ros-neg { font-size: 12px; color: #2e7d32; display: flex; align-items: center; gap: 4px; }
+        .ros-neg::before { content: "\2212"; font-weight: 700; width: 16px; }
+        .ros-past { font-size: 12px; color: #e65100; margin-top: 4px; font-style: italic; }
+
+        /* Red flags */
+        .red-flag { background: #ffebee; border-radius: 8px; padding: 8px 12px; margin-bottom: 6px; font-size: 13px; color: #c62828; display: flex; align-items: center; gap: 6px; }
+
+        /* Cultural */
+        .cultural-tag { display: inline-block; background: #f3e5f5; color: #7b1fa2; font-size: 12px; padding: 4px 10px; border-radius: 12px; margin: 2px 4px; }
+
+        /* Severity badge */
+        .severity-bar { padding: 10px 16px; border-radius: 8px; margin-bottom: 16px; display: flex; align-items: center; gap: 10px; font-size: 14px; font-weight: 600; }
+        .severity-emergency { background: #ffebee; color: #c62828; border-left: 4px solid #c62828; }
+        .severity-urgent { background: #fff3e0; color: #e65100; border-left: 4px solid #e65100; }
+        .severity-routine { background: #e8f5e9; color: #2e7d32; border-left: 4px solid #2e7d32; }
+
+        /* Screening/Dx */
+        .impression-text { font-size: 14px; color: #333; padding: 10px 0; line-height: 1.6; }
+        .finding-chip { display: inline-block; background: #e3f2fd; color: #1565c0; font-size: 12px; padding: 4px 10px; border-radius: 12px; margin: 2px 4px; }
+        .dx-list { list-style: none; }
+        .dx-item { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid #f0f0f0; }
+        .dx-item:last-child { border-bottom: none; }
+        .dx-bar { height: 6px; border-radius: 3px; background: #e0e0e0; flex: 1; max-width: 160px; }
+        .dx-bar-fill { height: 100%; border-radius: 3px; background: #1565c0; }
+        .dx-name { font-size: 13px; min-width: 200px; }
+        .dx-pct { font-size: 12px; color: #888; min-width: 40px; }
+        .dx-reason { font-size: 11px; color: #888; flex: 1; }
+
+        /* Conversation summary */
+        .conv-msg { font-size: 13px; color: #555; padding: 6px 12px; background: #f8f9fa; border-radius: 8px; margin-bottom: 4px; border-left: 3px solid #1565c0; }
+
+        .empty { text-align: center; padding: 60px 20px; color: #999; font-size: 14px; }
+        .empty a { color: #0066cc; }
+
+        .print-bar { text-align: center; margin-top: 20px; padding-bottom: 20px; }
+        .btn { padding: 10px 20px; border: none; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 600; margin: 0 4px; }
+        .btn-outline { background: white; color: #333; border: 1px solid #ddd; }
+        .btn-outline:hover { background: #f5f5f5; }
+
+        @media print {
+            .nav, .print-bar { display: none !important; }
+            body { background: white; }
+            .content { max-width: 100%; }
+        }
+    </style>
+</head>
+<body>
+    <div class="nav">
+        <span class="nav-brand">Compass Vitals</span>
+        <a href="/">Chat</a>
+        <a href="/dashboard">Dashboard</a>
+        <a href="/clinical-summary" class="active">Clinical Summary</a>
+        <a href="/clinical-summary-v2">Summary v2</a>
+        <a href="/soap-note">SOAP Note</a>
+        <a href="/care-plan">Care Plan</a>
+    </div>
+
+    <div class="header">
+        <h1>&#128209; T&#243;m T&#7855;t L&#226;m S&#224;ng / Clinical Summary</h1>
+        <div class="header-meta">
+            <span id="metaCase">Case: ---</span>
+            <span id="metaDate">Generated: ---</span>
+            <span id="metaLang">Language: ---</span>
+        </div>
+    </div>
+
+    <div class="content">
+        <div class="empty" id="emptyState">
+            <p>No clinical summary available yet.<br><a href="/">Start a chat</a> and complete the analysis pipeline first.</p>
+        </div>
+
+        <div id="summaryContent" style="display:none">
+
+            <!-- Severity Bar -->
+            <div id="severityBar" class="severity-bar" style="display:none"></div>
+
+            <!-- Red Flags Banner -->
+            <div id="redFlagsSection" class="section" style="display:none">
+                <div class="section-title" style="color:#c62828;border-color:#c62828;">&#9888; C&#7901; &#272;&#7887; / Red Flags</div>
+                <div id="redFlagsList"></div>
+            </div>
+
+            <!-- Clinical Impression from Screening -->
+            <div class="section" id="impressionSection" style="display:none">
+                <div class="section-title">&#128300; &#272;&#225;nh Gi&#225; L&#226;m S&#224;ng <span class="section-title-vi">/ Clinical Impression</span></div>
+                <div class="card">
+                    <div class="impression-text" id="impressionText"></div>
+                    <div id="keyFindings" style="margin-top:8px;"></div>
+                </div>
+            </div>
+
+            <!-- Chief Complaint -->
+            <div class="section">
+                <div class="section-title">&#128172; L&#253; Do Kh&#225;m <span class="section-title-vi">/ Chief Complaint</span></div>
+                <div class="card">
+                    <p id="ccText" style="font-size:15px;font-weight:600;color:#333;margin-bottom:12px;"></p>
+                    <p id="onsetDesc" style="font-size:13px;color:#555;margin-bottom:16px;"></p>
+                    <div class="oldcarts-grid" id="oldcartsGrid"></div>
+                </div>
+            </div>
+
+            <!-- HPI -->
+            <div class="section">
+                <div class="section-title">&#128221; Ti&#7873;n S&#7917; B&#7879;nh <span class="section-title-vi">/ History of Present Illness</span></div>
+                <div class="card" id="hpiCard"></div>
+            </div>
+
+            <!-- ROS -->
+            <div class="section" id="rosSection" style="display:none">
+                <div class="section-title">&#127891; Kh&#225;m H&#7879; Th&#7889;ng <span class="section-title-vi">/ Review of Systems</span></div>
+                <div id="rosList"></div>
+            </div>
+
+            <!-- Cultural Expressions -->
+            <div class="section" id="culturalSection" style="display:none">
+                <div class="section-title">&#127807; Bi&#7875;u &#272;&#7841;t V&#259;n H&#243;a <span class="section-title-vi">/ Cultural Expressions</span></div>
+                <div class="card" id="culturalCard"></div>
+            </div>
+
+            <!-- Differential Diagnoses -->
+            <div class="section" id="dxSection" style="display:none">
+                <div class="section-title">&#128202; Ch&#7849;n &#272;o&#225;n Ph&#226;n Bi&#7879;t <span class="section-title-vi">/ Differential Diagnoses</span></div>
+                <div class="card">
+                    <ul class="dx-list" id="dxList"></ul>
+                </div>
+            </div>
+
+            <!-- Conversation Summary -->
+            <div class="section" id="convSection" style="display:none">
+                <div class="section-title">&#128172; T&#243;m T&#7855;t H&#7897;i Tho&#7841;i <span class="section-title-vi">/ Patient Statements</span></div>
+                <div class="card" id="convCard"></div>
+            </div>
+
+            <div class="print-bar">
+                <button class="btn btn-outline" onclick="window.print()">&#128424; In Clinical Summary</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const params = new URLSearchParams(window.location.search);
+        const sessionId = params.get('session');
+
+        // Update nav links with session param
+        if (sessionId) {
+            document.querySelectorAll('.nav a').forEach(a => {
+                const href = a.getAttribute('href');
+                if (href !== '/' && !href.includes('?')) {
+                    a.href = `${href}?session=${sessionId}`;
+                } else if (href === '/') {
+                    a.href = `/?session=${sessionId}`;
+                }
+            });
+            loadSummary();
+        }
+
+        async function loadSummary() {
+            try {
+                const res = await fetch(`/api/v1/flow/${sessionId}/clinical-summary`);
+                if (!res.ok) {
+                    if (res.status === 404) {
+                        document.getElementById('emptyState').innerHTML = '<p>Clinical summary ch\u01B0a s\u1EB5n s\u00E0ng.<br>H\u00E3y <a href="/">chat v\u1EDBi Intake Agent</a>, sau \u0111\u00F3 b\u1EA5m <strong>"Ph\u00E2n t\u00EDch & L\u1EADp k\u1EBF ho\u1EA1ch"</strong> \u0111\u1EC3 ch\u1EA1y pipeline.</p>';
+                    }
+                    return;
+                }
+                const cs = await res.json();
+
+                document.getElementById('emptyState').style.display = 'none';
+                document.getElementById('summaryContent').style.display = 'block';
+
+                // Meta
+                document.getElementById('metaCase').textContent = `Case: ${cs.case_id.substring(0, 8)}...`;
+                document.getElementById('metaDate').textContent = `Generated: ${new Date(cs.generated_at).toLocaleString('vi-VN')}`;
+                document.getElementById('metaLang').textContent = `Language: ${cs.detected_language === 'vi' ? 'Ti\u1ebfng Vi\u1ec7t' : 'English'}`;
+
+                // Severity bar
+                if (cs.severity) {
+                    const sBar = document.getElementById('severityBar');
+                    const labels = {emergency: 'KHAN CAP / EMERGENCY', urgent: 'CAN XU LY / URGENT', routine: 'THONG THUONG / ROUTINE'};
+                    sBar.textContent = labels[cs.severity] || cs.severity.toUpperCase();
+                    sBar.className = `severity-bar severity-${cs.severity}`;
+                    sBar.style.display = 'flex';
+                }
+
+                // Red Flags
+                if (cs.red_flags && cs.red_flags.length > 0) {
+                    document.getElementById('redFlagsSection').style.display = 'block';
+                    const list = document.getElementById('redFlagsList');
+                    cs.red_flags.forEach(flag => {
+                        list.innerHTML += `<div class="red-flag">&#9888; ${flag.replace(/_/g, ' ')}</div>`;
+                    });
+                }
+
+                // Clinical Impression from Screening
+                if (cs.screening && cs.screening.clinical_impression) {
+                    document.getElementById('impressionSection').style.display = 'block';
+                    document.getElementById('impressionText').textContent = cs.screening.clinical_impression;
+                    const kf = document.getElementById('keyFindings');
+                    (cs.screening.key_findings || []).forEach(f => {
+                        kf.innerHTML += `<span class="finding-chip">${f}</span>`;
+                    });
+                }
+
+                // Chief Complaint
+                document.getElementById('ccText').textContent = cs.chief_complaint.complaint || 'N/A';
+                document.getElementById('onsetDesc').textContent = cs.chief_complaint.onset_description || '';
+
+                // OLDCARTS grid
+                const grid = document.getElementById('oldcartsGrid');
+                const oc = cs.chief_complaint.oldcarts || {};
+                const labels = {
+                    onset: 'Onset / Kh\u1edfi ph\u00e1t',
+                    location: 'Location / V\u1ecb tr\u00ed',
+                    duration: 'Duration / Th\u1eddi gian',
+                    character: 'Character / T\u00ednh ch\u1ea5t',
+                    aggravating: 'Aggravating / T\u0103ng khi',
+                    alleviating: 'Alleviating / Gi\u1ea3m khi',
+                    radiation: 'Radiation / Lan',
+                    timing: 'Timing / Th\u1eddi \u0111i\u1ec3m',
+                    severity: 'Severity / M\u1ee9c \u0111\u1ed9',
+                };
+                Object.entries(labels).forEach(([key, label]) => {
+                    const val = oc[key] || '';
+                    grid.innerHTML += `
+                        <div class="oldcarts-item">
+                            <div class="oldcarts-label">${label}</div>
+                            <div class="oldcarts-value ${val ? '' : 'empty'}">${val || 'Not reported'}</div>
+                        </div>
+                    `;
+                });
+
+                // HPI
+                const hpiCard = document.getElementById('hpiCard');
+                const hpiFields = [
+                    ['Past Medical History', cs.hpi.past_medical_history],
+                    ['Ti\u1ec1n s\u1eed b\u1ec7nh', cs.hpi.past_medical_history_vi],
+                    ['Current Medications', cs.hpi.current_medications],
+                    ['Thu\u1ed1c \u0111ang d\u00f9ng', cs.hpi.current_medications_vi],
+                    ['Allergies', cs.hpi.allergies],
+                    ['D\u1ecb \u1ee9ng', cs.hpi.allergies_vi],
+                    ['Social History', cs.hpi.social_history],
+                    ['Ti\u1ec1n s\u1eed x\u00e3 h\u1ed9i', cs.hpi.social_history_vi],
+                    ['Family History', cs.hpi.family_history],
+                    ['Ti\u1ec1n s\u1eed gia \u0111\u00ecnh', cs.hpi.family_history_vi],
+                    ['Surgical History', cs.hpi.surgical_history],
+                ];
+                hpiFields.forEach(([label, value]) => {
+                    // Skip Vietnamese labels if empty and English already shown
+                    if (!value) return;
+                    hpiCard.innerHTML += `
+                        <div class="hpi-row">
+                            <span class="hpi-label">${label}</span>
+                            <span class="hpi-value">${value}</span>
+                        </div>
+                    `;
+                });
+                if (hpiCard.innerHTML === '') {
+                    hpiCard.innerHTML = '<p style="color:#999;font-size:13px;text-align:center;padding:12px;">No history data collected</p>';
+                }
+
+                // ROS
+                if (cs.ros && cs.ros.length > 0) {
+                    document.getElementById('rosSection').style.display = 'block';
+                    const rosList = document.getElementById('rosList');
+                    cs.ros.forEach(sys => {
+                        let html = `<div class="ros-card">
+                            <div class="ros-system">${sys.system_name.replace(/_/g, ' ')} ${sys.system_name_vi ? '<small>(' + sys.system_name_vi + ')</small>' : ''}</div>
+                            <div class="ros-findings">`;
+
+                        (sys.positives || []).forEach(p => {
+                            html += `<div class="ros-pos">${p}</div>`;
+                        });
+                        (sys.pertinent_negatives || []).forEach(n => {
+                            html += `<div class="ros-neg">${n}</div>`;
+                        });
+                        if (sys.past_similar_episodes) {
+                            html += `<div class="ros-past">Past: ${sys.past_similar_episodes}</div>`;
+                        }
+
+                        html += '</div></div>';
+                        rosList.innerHTML += html;
+                    });
+                }
+
+                // Cultural Expressions
+                if (cs.cultural_expressions && cs.cultural_expressions.length > 0) {
+                    document.getElementById('culturalSection').style.display = 'block';
+                    const card = document.getElementById('culturalCard');
+                    let html = '';
+                    cs.cultural_expressions.forEach(expr => {
+                        html += `<span class="cultural-tag">"${expr.original || ''}" &rarr; ${expr.medical_meaning || ''}</span>`;
+                    });
+                    card.innerHTML = html;
+                }
+
+                // Differential Diagnoses
+                if (cs.differential_diagnoses && cs.differential_diagnoses.length > 0) {
+                    document.getElementById('dxSection').style.display = 'block';
+                    const dxList = document.getElementById('dxList');
+                    cs.differential_diagnoses.forEach(dx => {
+                        const li = document.createElement('li');
+                        li.className = 'dx-item';
+                        li.innerHTML = `
+                            <span class="dx-name">${dx.name} ${dx.name_vi ? '(' + dx.name_vi + ')' : ''}</span>
+                            <div class="dx-bar"><div class="dx-bar-fill" style="width:${dx.confidence}%"></div></div>
+                            <span class="dx-pct">${dx.confidence}%</span>
+                            <span class="dx-reason">${dx.reasoning || ''}</span>
+                        `;
+                        dxList.appendChild(li);
+                    });
+                }
+
+                // Conversation Summary
+                if (cs.conversation_summary) {
+                    document.getElementById('convSection').style.display = 'block';
+                    const card = document.getElementById('convCard');
+                    cs.conversation_summary.split(' | ').forEach(msg => {
+                        if (msg.trim()) {
+                            card.innerHTML += `<div class="conv-msg">${msg.trim()}</div>`;
+                        }
+                    });
+                }
+
+            } catch (err) { console.error('Failed to load clinical summary:', err); }
+        }
+    </script>
+</body>
+</html>
