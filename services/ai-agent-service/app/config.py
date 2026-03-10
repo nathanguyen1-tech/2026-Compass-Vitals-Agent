@@ -31,5 +31,14 @@ class Settings(BaseSettings):
     phi_encryption_key: str = ""
     phi_mapping_ttl_hours: int = 24
 
+    # Voice (Gemini Live)
+    gemini_api_key: str = ""
+    gemini_live_model: str = "gemini-2.5-flash-native-audio-preview-12-2025"
+    tts_voice: str = "Kore"
+    voice_session_max_minutes: int = 15
+
+    # Ngrok (optional tunneling)
+    ngrok_authtoken: str = ""
+
 
 settings = Settings()

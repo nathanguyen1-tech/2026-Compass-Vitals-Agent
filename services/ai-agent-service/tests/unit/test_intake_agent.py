@@ -119,3 +119,57 @@ class TestCulturalExpressions:
             "inflammation" in e["medical_terms"]
             for e in result["cultural_expressions"]
         )
+
+
+class TestLLMEmergencyMarkerOverride:
+    """Tests for Tier 3 LLM-detected emergency via [INTAKE:emergency_detected=...] marker."""
+
+    @pytest.mark.asyncio
+    async def test_llm_emergency_marker_triggers_emergency(self, mock_gateway, phi):
+        """When LLM emits emergency_detected marker, intake should return emergency."""
+        llm_response_with_marker = LLMResponse(
+            content=(
+                "I understand you're feeling pressure on your chest. "
+                "[INTAKE:emergency_detected=probable_acs_indirect_description]"
+            ),
+            model="gpt-4o-mini",
+            usage={"prompt_tokens": 100, "completion_tokens": 50, "total_tokens": 150},
+            finish_reason="stop",
+        )
+        state = _make_state(
+            messages=[HumanMessage(content="nguc toi nhu bi de nat, kho chiu lam")]
+        )
+        mock_gateway._call_with_retry = AsyncMock(return_value=llm_response_with_marker)
+        result = await intake_node(state, mock_gateway, phi)
+        assert result["is_emergency"] is True
+        assert "KHẨN CẤP" in result["messages"][0].content or "EMERGENCY" in result["messages"][0].content
+
+    @pytest.mark.asyncio
+    async def test_no_emergency_marker_returns_normal(self, mock_gateway, phi):
+        """Without emergency marker, response should be normal."""
+        normal_response = LLMResponse(
+            content="Ban bi dau bung bao lau roi? [INTAKE:onset=asking]",
+            model="gpt-4o-mini",
+            usage={"prompt_tokens": 100, "completion_tokens": 50, "total_tokens": 150},
+            finish_reason="stop",
+        )
+        state = _make_state(
+            messages=[HumanMessage(content="toi bi dau bung 2 ngay")]
+        )
+        mock_gateway._call_with_retry = AsyncMock(return_value=normal_response)
+        result = await intake_node(state, mock_gateway, phi)
+        assert result["is_emergency"] is False
+
+
+class TestNegationInIntakeAgent:
+    """Negated emergency keywords should not trigger emergency in intake_node."""
+
+    @pytest.mark.asyncio
+    async def test_negated_chest_pain_not_emergency(self, mock_gateway, phi, mock_response):
+        """'toi khong bi dau nguc' should NOT trigger emergency."""
+        state = _make_state(
+            messages=[HumanMessage(content="toi không bị đau ngực")]
+        )
+        mock_gateway._call_with_retry = AsyncMock(return_value=mock_response)
+        result = await intake_node(state, mock_gateway, phi)
+        assert result["is_emergency"] is False

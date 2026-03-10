@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Compass Vitals — Care Flow Dashboard</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f0f2f5; min-height: 100vh; }
+
+        .nav { background: #1a1a2e; padding: 8px 24px; display: flex; gap: 16px; align-items: center; }
+        .nav a { color: #aaa; text-decoration: none; font-size: 13px; padding: 4px 12px; border-radius: 4px; }
+        .nav a:hover, .nav a.active { color: white; background: rgba(255,255,255,0.1); }
+        .nav-brand { color: white; font-weight: 700; font-size: 14px; margin-right: 16px; }
+
+        .header { background: linear-gradient(135deg, #0066cc, #004999); color: white; padding: 20px 24px; }
+        .header h1 { font-size: 20px; margin-bottom: 4px; }
+        .header p { font-size: 12px; opacity: 0.85; }
+
+        .content { max-width: 900px; margin: 0 auto; padding: 24px; }
+
+        /* Pipeline */
+        .pipeline { display: flex; align-items: center; justify-content: center; gap: 0; margin-bottom: 28px; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+        .step { display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 100px; }
+        .step-circle { width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 700; border: 3px solid #ddd; background: white; color: #999; transition: all 0.3s; }
+        .step-circle.active { border-color: #0066cc; background: #e3f2fd; color: #0066cc; animation: pulseStep 1.5s infinite; }
+        .step-circle.done { border-color: #4caf50; background: #4caf50; color: white; }
+        .step-circle.error { border-color: #f44336; background: #ffebee; color: #f44336; }
+        @keyframes pulseStep { 0%, 100% { box-shadow: 0 0 0 0 rgba(0,102,204,0.3); } 50% { box-shadow: 0 0 0 8px rgba(0,102,204,0); } }
+        .step-label { font-size: 11px; font-weight: 600; color: #666; text-align: center; }
+        .step-arrow { font-size: 20px; color: #ccc; margin: 0 4px; padding-bottom: 20px; }
+        .step-arrow.done { color: #4caf50; }
+
+        /* Cards */
+        .card { background: white; border-radius: 10px; padding: 18px; margin-bottom: 16px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+        .card-header { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+        .card-icon { width: 28px; height: 28px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 14px; }
+        .card-title { font-size: 14px; font-weight: 600; color: #333; }
+        .card-badge { margin-left: auto; font-size: 11px; padding: 3px 10px; border-radius: 12px; font-weight: 600; }
+        .card.hidden { display: none; }
+
+        /* Intake card */
+        .icon-intake { background: #e3f2fd; color: #0066cc; }
+        /* Screening card */
+        .icon-screening { background: #f3e5f5; color: #7b1fa2; }
+        .badge-emergency { background: #ffebee; color: #c62828; }
+        .badge-urgent { background: #fff3e0; color: #e65100; }
+        .badge-routine { background: #e8f5e9; color: #2e7d32; }
+        /* Proposer card */
+        .icon-proposer { background: #fff3e0; color: #e65100; }
+        /* Critic card */
+        .icon-critic { background: #e8f5e9; color: #2e7d32; }
+        .badge-approved { background: #e8f5e9; color: #2e7d32; }
+        .badge-rejected { background: #ffebee; color: #c62828; }
+
+        /* Diagnosis list */
+        .dx-list { list-style: none; }
+        .dx-item { display: flex; align-items: center; gap: 10px; padding: 6px 0; border-bottom: 1px solid #f5f5f5; }
+        .dx-item:last-child { border-bottom: none; }
+        .dx-bar { height: 6px; border-radius: 3px; background: #e0e0e0; flex: 1; max-width: 200px; }
+        .dx-bar-fill { height: 100%; border-radius: 3px; background: #0066cc; }
+        .dx-name { font-size: 13px; min-width: 180px; }
+        .dx-pct { font-size: 12px; color: #888; min-width: 40px; }
+
+        /* Order list */
+        .order-item { display: flex; align-items: flex-start; gap: 8px; padding: 8px 0; border-bottom: 1px solid #f5f5f5; font-size: 13px; }
+        .order-item:last-child { border-bottom: none; }
+        .order-icon { font-size: 16px; flex-shrink: 0; }
+
+        /* Issues */
+        .issue-item { padding: 6px 10px; border-radius: 6px; margin: 4px 0; font-size: 12px; }
+        .issue-critical { background: #ffebee; color: #c62828; }
+        .issue-warning { background: #fff8e1; color: #f57f17; }
+        .issue-info { background: #e3f2fd; color: #1565c0; }
+
+        /* Empty */
+        .empty { text-align: center; padding: 40px; color: #999; font-size: 14px; }
+
+        /* Action */
+        .action-row { text-align: center; margin-top: 20px; }
+        .btn { padding: 10px 24px; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600; text-decoration: none; display: inline-block; }
+        .btn-primary { background: #0066cc; color: white; }
+        .btn-primary:hover { background: #0055aa; }
+        .btn-success { background: #2e7d32; color: white; }
+        .btn-success:hover { background: #1b5e20; }
+    </style>
+</head>
+<body>
+    <div class="nav">
+        <span class="nav-brand">Compass Vitals</span>
+        <a href="/">Chat</a>
+        <a href="/dashboard" class="active" id="navDashboard">Dashboard</a>
+        <a href="/clinical-summary" id="navClinicalSummary">Clinical Summary</a>
+        <a href="/clinical-summary-v2" id="navSummaryV2">Summary v2</a>
+        <a href="/soap-note" id="navSoapNote">SOAP Note</a>
+        <a href="/care-plan" id="navCarePlan">Care Plan</a>
+    </div>
+
+    <div class="header">
+        <h1>Care Flow Dashboard</h1>
+        <p id="headerSession">Session: ---</p>
+    </div>
+
+    <div class="content">
+        <!-- Pipeline Progress -->
+        <div class="pipeline">
+            <div class="step"><div class="step-circle" id="stepIntake">1</div><div class="step-label">Intake</div></div>
+            <div class="step-arrow" id="arrow1">&rarr;</div>
+            <div class="step"><div class="step-circle" id="stepScreening">2</div><div class="step-label">Screening</div></div>
+            <div class="step-arrow" id="arrow2">&rarr;</div>
+            <div class="step"><div class="step-circle" id="stepProposer">3</div><div class="step-label">Proposer</div></div>
+            <div class="step-arrow" id="arrow3">&rarr;</div>
+            <div class="step"><div class="step-circle" id="stepCritic">4</div><div class="step-label">Critic</div></div>
+        </div>
+
+        <!-- No Session -->
+        <div class="empty" id="emptyState">
+            <p>No session selected. <a href="/">Start a chat</a> first, then come back here.</p>
+        </div>
+
+        <!-- Intake Card -->
+        <div class="card hidden" id="intakeCard">
+            <div class="card-header">
+                <div class="card-icon icon-intake">&#128172;</div>
+                <span class="card-title">Intake Summary</span>
+            </div>
+            <div id="intakeContent"></div>
+        </div>
+
+        <!-- Screening Card -->
+        <div class="card hidden" id="screeningCard">
+            <div class="card-header">
+                <div class="card-icon icon-screening">&#128269;</div>
+                <span class="card-title">Screening Results</span>
+                <span class="card-badge" id="severityBadge"></span>
+            </div>
+            <ul class="dx-list" id="dxList"></ul>
+        </div>
+
+        <!-- Proposer Card -->
+        <div class="card hidden" id="proposerCard">
+            <div class="card-header">
+                <div class="card-icon icon-proposer">&#128138;</div>
+                <span class="card-title">Treatment Recommendations</span>
+            </div>
+            <div id="ordersList"></div>
+        </div>
+
+        <!-- Critic Card -->
+        <div class="card hidden" id="criticCard">
+            <div class="card-header">
+                <div class="card-icon icon-critic">&#9989;</div>
+                <span class="card-title">Safety Validation</span>
+                <span class="card-badge" id="criticBadge"></span>
+            </div>
+            <div id="criticContent"></div>
+        </div>
+
+        <!-- Care Plan Button -->
+        <div class="action-row hidden" id="carePlanAction">
+            <a href="/care-plan" class="btn btn-success" id="carePlanLink">&#128203; Xem K&#7871; Ho&#7841;ch Ch&#259;m S&#243;c</a>
+        </div>
+    </div>
+
+    <script>
+        const params = new URLSearchParams(window.location.search);
+        const sessionId = params.get('session');
+
+        if (sessionId) {
+            document.getElementById('headerSession').textContent = `Session: ${sessionId.substring(0, 8)}...`;
+            document.getElementById('emptyState').style.display = 'none';
+            // Update nav links with session
+            document.getElementById('navDashboard').href = `/dashboard?session=${sessionId}`;
+            document.getElementById('navClinicalSummary').href = `/clinical-summary?session=${sessionId}`;
+            document.getElementById('navSummaryV2').href = `/clinical-summary-v2?session=${sessionId}`;
+            document.getElementById('navSoapNote').href = `/soap-note?session=${sessionId}`;
+            document.getElementById('navCarePlan').href = `/care-plan?session=${sessionId}`;
+            loadStatus();
+        }
+
+        async function loadStatus() {
+            if (!sessionId) return;
+            try {
+                const statusRes = await fetch(`/api/v1/flow/${sessionId}/status`);
+                if (!statusRes.ok) return;
+                const status = await statusRes.json();
+
+                // Pipeline steps
+                updateStep('stepIntake', status.intake_complete ? 'done' : 'active', 'arrow1');
+                updateStep('stepScreening', status.screening_complete ? 'done' : (status.intake_complete ? 'active' : ''), 'arrow2');
+                updateStep('stepProposer', status.proposer_complete ? 'done' : (status.screening_complete ? 'active' : ''), 'arrow3');
+                updateStep('stepCritic', status.critic_complete ? (status.critic_approved ? 'done' : 'error') : (status.proposer_complete ? 'active' : ''), null);
+
+                // Show intake card
+                if (status.intake_complete) {
+                    document.getElementById('intakeCard').classList.remove('hidden');
+                    document.getElementById('intakeContent').innerHTML = '<p style="font-size:13px;color:#666;">Intake data collected via OLDCARTS interview.</p>';
+                }
+
+                // Load care plan data if available
+                if (status.care_plan_ready) {
+                    const cpRes = await fetch(`/api/v1/flow/${sessionId}/care-plan`);
+                    if (cpRes.ok) {
+                        const cp = await cpRes.json();
+                        renderScreening(cp);
+                        renderOrders(cp);
+                        renderCritic(cp);
+                        document.getElementById('carePlanAction').classList.remove('hidden');
+                        document.getElementById('carePlanLink').href = `/care-plan?session=${sessionId}`;
+                    }
+                }
+            } catch (err) { console.error('Failed to load status:', err); }
+        }
+
+        function updateStep(id, state, arrowId) {
+            const el = document.getElementById(id);
+            el.classList.remove('active', 'done', 'error');
+            if (state) el.classList.add(state);
+            if (state === 'done') el.innerHTML = '&#10003;';
+            if (arrowId && state === 'done') document.getElementById(arrowId).classList.add('done');
+        }
+
+        function renderScreening(cp) {
+            const card = document.getElementById('screeningCard');
+            card.classList.remove('hidden');
+            const badge = document.getElementById('severityBadge');
+            badge.textContent = (cp.severity || 'N/A').toUpperCase();
+            badge.className = `card-badge badge-${cp.severity || 'routine'}`;
+
+            const dxList = document.getElementById('dxList');
+            dxList.innerHTML = '';
+            (cp.differential_diagnoses || []).forEach(dx => {
+                const li = document.createElement('li');
+                li.className = 'dx-item';
+                li.innerHTML = `
+                    <span class="dx-name">${dx.name} ${dx.name_vi ? '(' + dx.name_vi + ')' : ''}</span>
+                    <div class="dx-bar"><div class="dx-bar-fill" style="width:${dx.confidence}%"></div></div>
+                    <span class="dx-pct">${dx.confidence}%</span>
+                `;
+                dxList.appendChild(li);
+            });
+        }
+
+        function renderOrders(cp) {
+            const card = document.getElementById('proposerCard');
+            card.classList.remove('hidden');
+            const list = document.getElementById('ordersList');
+            list.innerHTML = '';
+
+            (cp.medications || []).forEach(med => {
+                list.innerHTML += `<div class="order-item"><span class="order-icon">&#128138;</span><div><strong>${med.drug}</strong> ${med.dosage} ${med.frequency}<br><small style="color:#888">${med.rationale}</small></div></div>`;
+            });
+            (cp.lab_orders || []).forEach(lab => {
+                list.innerHTML += `<div class="order-item"><span class="order-icon">&#129514;</span><div><strong>${lab.test_name}</strong> [${lab.urgency}]<br><small style="color:#888">${lab.rationale}</small></div></div>`;
+            });
+            (cp.imaging_orders || []).forEach(img => {
+                list.innerHTML += `<div class="order-item"><span class="order-icon">&#128247;</span><div><strong>${img.imaging_type}</strong> [${img.urgency}]<br><small style="color:#888">${img.rationale}</small></div></div>`;
+            });
+        }
+
+        function renderCritic(cp) {
+            if (!cp.critic) return;
+            const card = document.getElementById('criticCard');
+            card.classList.remove('hidden');
+            const badge = document.getElementById('criticBadge');
+            badge.textContent = cp.critic.status === 'approved' ? 'APPROVED' : cp.critic.status.toUpperCase();
+            badge.className = `card-badge ${cp.critic.status === 'approved' ? 'badge-approved' : 'badge-rejected'}`;
+
+            const content = document.getElementById('criticContent');
+            content.innerHTML = `
+                <p style="font-size:13px;margin-bottom:8px;">Safety Score: <strong>${cp.critic.safety_score}/100</strong></p>
+                <p style="font-size:13px;color:#666;">${cp.critic.summary || ''}</p>
+            `;
+            if (cp.critic.issues_count > 0) {
+                content.innerHTML += `<p style="font-size:12px;color:#e65100;margin-top:6px;">${cp.critic.issues_count} issue(s) found</p>`;
+            }
+        }
+    </script>
+</body>
+</html>
