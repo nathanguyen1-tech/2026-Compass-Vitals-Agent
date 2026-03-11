@@ -4,7 +4,10 @@ Bao gồm PHI verification, retry, fallback, circuit breaker.
 Mọi agent BẮT BUỘC phải đi qua gateway — không được gọi OpenAI trực tiếp.
 """
 
+import time
+import uuid
 from abc import ABC, abstractmethod
+from datetime import datetime, timezone
 
 import structlog
 from circuitbreaker import circuit
@@ -13,6 +16,7 @@ from pydantic import BaseModel
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 from app.core.exceptions import LLMError, PHIAccessError
+from app.domain.services.llm_log_store import LLMLogEntry, log_store
 from app.domain.services.phi_deidentifier import PHIDeidentifier
 
 logger = structlog.get_logger()
@@ -84,19 +88,60 @@ class LLMGateway:
         messages: list[dict],
         agent_type: str,
         case_id: str,
+        session_id: str = "",
         **kwargs,
     ) -> LLMResponse:
-        """Generate với PHI verification + retry + fallback."""
+        """Generate với PHI verification + retry + fallback + observability logging."""
         # BƯỚC 1: PHI Verification Gate
         self._verify_no_phi(messages, case_id)
 
         # BƯỚC 2: Chọn provider dựa trên agent type
         provider = self._select_provider(agent_type)
 
-        # BƯỚC 3: Gọi LLM với retry
-        response = await self._call_with_retry(provider, messages, **kwargs)
+        # BƯỚC 3: Gọi LLM với retry + capture timing
+        start_time = time.perf_counter()
+        status = "success"
+        error_message = ""
+        response_content = ""
+        usage = {}
+        finish_reason = ""
+        model_name = provider.model if hasattr(provider, "model") else "unknown"
+        response = None
 
-        # BƯỚC 4: Log usage
+        try:
+            response = await self._call_with_retry(provider, messages, **kwargs)
+            response_content = response.content
+            usage = response.usage
+            finish_reason = response.finish_reason
+            model_name = response.model
+        except Exception as exc:
+            status = "error"
+            error_message = str(exc)
+            raise
+        finally:
+            elapsed_ms = (time.perf_counter() - start_time) * 1000
+            entry = LLMLogEntry(
+                id=str(uuid.uuid4()),
+                timestamp=datetime.now(timezone.utc).isoformat(),
+                model=model_name,
+                agent_type=agent_type,
+                case_id=case_id,
+                session_id=session_id,
+                prompt_tokens=usage.get("prompt_tokens", 0) if isinstance(usage, dict) else 0,
+                completion_tokens=usage.get("completion_tokens", 0) if isinstance(usage, dict) else 0,
+                total_tokens=usage.get("total_tokens", 0) if isinstance(usage, dict) else 0,
+                latency_ms=round(elapsed_ms, 1),
+                status=status,
+                error_message=error_message,
+                request_messages=messages,
+                response_content=response_content,
+                finish_reason=finish_reason,
+                temperature=kwargs.get("temperature", 0.3),
+                max_tokens=kwargs.get("max_tokens", 4096),
+            )
+            log_store.add(entry)
+
+        # BƯỚC 4: Log usage (unchanged)
         logger.info(
             "llm_usage",
             model=response.model,

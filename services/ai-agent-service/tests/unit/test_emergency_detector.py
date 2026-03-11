@@ -4,6 +4,7 @@ from app.agents.tools.emergency_detector import (
     detect_emergency,
     detect_emergency_with_negation,
     detect_high_temperature,
+    detect_instant_emergency,
     get_emergency_keywords_found,
 )
 
@@ -195,7 +196,7 @@ class TestExpandedKeywords:
     # --- Suicide / Self-harm ---
 
     def test_tu_tu_unicode(self):
-        assert detect_emergency("toi muon tu tu") is False  # "tự tử" not "tu tu"
+        assert detect_emergency("toi muon tu tu") is True  # ASCII-folded "tự tử"
         assert detect_emergency("toi muon tự tử") is True
 
     def test_muon_chet_ascii(self):
@@ -302,3 +303,68 @@ class TestNegationDetection:
 
     def test_normal_text_no_trigger(self):
         assert detect_emergency_with_negation("I have a mild headache for 2 days") is False
+
+
+# === INSTANT emergency detection tests ===
+
+
+class TestInstantEmergency:
+    """Tests for detect_instant_emergency() — small keyword set only."""
+
+    # --- INSTANT keywords should trigger ---
+
+    def test_bat_tinh_instant(self):
+        assert detect_instant_emergency("benh nhan bất tỉnh") is True
+
+    def test_co_giat_instant(self):
+        assert detect_instant_emergency("benh nhan co giật") is True
+
+    def test_muon_chet_instant(self):
+        assert detect_instant_emergency("toi muon chet") is True
+
+    def test_suicide_en_instant(self):
+        assert detect_instant_emergency("thinking about suicide") is True
+
+    def test_vomiting_blood_instant(self):
+        assert detect_instant_emergency("I am vomiting blood") is True
+
+    def test_overdose_instant(self):
+        assert detect_instant_emergency("I took an overdose") is True
+
+    def test_temperature_42c_instant(self):
+        assert detect_instant_emergency("sot 42 do C") is True
+
+    # --- NON-instant keywords should NOT trigger ---
+
+    def test_chest_pain_not_instant(self):
+        """'dau nguc' is NOT in INSTANT list — handled by LLM confirmation."""
+        assert detect_instant_emergency("Tôi bị đau ngực rất nặng") is False
+
+    def test_kho_tho_not_instant(self):
+        """'kho tho' is NOT in INSTANT list — handled by LLM."""
+        assert detect_instant_emergency("Tôi khó thở quá") is False
+
+    def test_difficulty_breathing_not_instant(self):
+        assert detect_instant_emergency("I have difficulty breathing") is False
+
+    def test_numbness_not_instant(self):
+        assert detect_instant_emergency("I have numbness on one side") is False
+
+    def test_fainting_not_instant(self):
+        assert detect_instant_emergency("I fainted yesterday") is False
+
+    def test_heart_attack_not_instant(self):
+        assert detect_instant_emergency("I think I'm having a heart attack") is False
+
+    # --- Negation should prevent instant trigger ---
+
+    def test_negated_suicide_not_instant(self):
+        assert detect_instant_emergency("I do not want to die") is False
+
+    def test_negated_bat_tinh_not_instant(self):
+        assert detect_instant_emergency("toi khong bi bất tỉnh") is False
+
+    # --- Normal text ---
+
+    def test_normal_text_not_instant(self):
+        assert detect_instant_emergency("I have a mild headache") is False

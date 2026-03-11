@@ -34,28 +34,70 @@ _EMERGENCY_DETECTION_INSTRUCTIONS = """\
 EMERGENCY DETECTION (CRITICAL — applies at ALL phases):
 You MUST assess EVERY patient message for emergency signals. This includes:
 - Direct statements: "I have chest pain", "I can't breathe", "dau nguc", "kho tho"
-- Indirect/metaphorical: "something pressing on my chest", "tim toi nhu muon ngung"
+- Indirect/metaphorical: "something pressing on my chest", "nguc nhu bi de nat"
 - Escalating severity: "worst ever", "never felt this before", "getting worse fast"
-- Suicidal ideation (even indirect): "I don't see the point anymore", "khong muon song nua"
+- Suicidal ideation (even indirect): "I don't see the point anymore"
 - Dangerous vitals described without numbers: "sot cao lam", "very high fever"
 - Combined symptoms individually mild but together alarming
 - Pediatric danger signs: child not drinking, not urinating, lethargic
 
-If you detect ANY potential emergency (err on the side of caution — false positives are acceptable):
-Include this marker at the END of your response:
-[INTAKE:emergency_detected=BRIEF_REASON]
+WHEN YOU SUSPECT AN EMERGENCY:
+1. Do NOT immediately declare an emergency.
+2. Emit [INTAKE:emergency_suspected=BRIEF_REASON] to flag it.
+3. Ask ONE calm, targeted confirmation question in the patient's language:
+   - "Trieu chung nay dang xay ra NGAY BAY GIO khong?" / "Is this happening RIGHT NOW?"
+   - "Muc do dau tren thang 1-10?" / "How severe is the pain on a scale of 1-10?"
+   - "Co kem theo trieu chung nao khac khong?" / "Any other symptoms with it?"
+4. Wait for the patient's response. Based on their answer:
+   - If symptoms are ACTIVE, SEVERE, or ACUTE → ask ONE MORE confirmation question,
+     then emit [INTAKE:emergency_confirmed=REASON]
+   - If symptoms are MILD, PAST, or CHRONIC → emit
+     [INTAKE:emergency_cleared=reason] and continue normal intake.
+   - If AMBIGUOUS → ask ONE more question, then MUST decide.
+
+AFTER 2 CONFIRMATION QUESTIONS: You MUST emit either
+[INTAKE:emergency_confirmed=REASON] or [INTAKE:emergency_cleared=reason].
+Do not keep asking — decide based on available information.
 
 Examples:
-- [INTAKE:emergency_detected=probable_acs_indirect_description]
-- [INTAKE:emergency_detected=suicidal_ideation_indirect]
-- [INTAKE:emergency_detected=respiratory_distress_escalating]
-- [INTAKE:emergency_detected=pediatric_dehydration_severe]
+- [INTAKE:emergency_suspected=chest_pain_active_description]
+- [INTAKE:emergency_confirmed=severe_chest_pain_with_dyspnea_active]
+- [INTAKE:emergency_cleared=mild_chest_discomfort_resolved_yesterday]
 
-DO NOT emit this marker for:
+NEVER emit emergency_confirmed for:
 - Mild/routine complaints with no emergency features
 - Historical/past emergencies the patient recovered from
 - Negated symptoms: "I do NOT have chest pain" should NOT trigger
 - Symptoms explicitly described as mild/chronic/stable"""
+
+
+def _emergency_confirmation_section(suspected_emergency: dict) -> str:
+    """Build prompt section reminding LLM about active suspected emergency."""
+    reason = suspected_emergency.get("reason", "unknown")
+    asked = suspected_emergency.get("confirmation_questions_asked", 0)
+    remaining = max(0, 2 - asked)
+
+    lines = [
+        "*** ACTIVE EMERGENCY INVESTIGATION ***",
+        f"You previously suspected an emergency: {reason}",
+        f"Confirmation questions asked so far: {asked}",
+    ]
+
+    if remaining > 0:
+        lines.append(
+            f"You have {remaining} more question(s) to ask before you MUST decide."
+        )
+        lines.append(
+            "Ask a calm, targeted follow-up question to determine severity and acuity."
+        )
+    else:
+        lines.append(
+            "You have asked enough questions. You MUST now emit either "
+            "[INTAKE:emergency_confirmed=REASON] or [INTAKE:emergency_cleared=reason]."
+        )
+
+    lines.append("*** END EMERGENCY INVESTIGATION ***")
+    return "\n".join(lines)
 
 _MARKER_INSTRUCTIONS = """\
 STRUCTURED DATA EXTRACTION:
@@ -399,6 +441,10 @@ def compose_intake_prompt(
         Complete system prompt string.
     """
     sections = [_ROLE_DEFINITION, _CORE_RULES, _EMERGENCY_DETECTION_INSTRUCTIONS]
+
+    # Inject emergency confirmation context if suspected emergency is active
+    if tracker and tracker.suspected_emergency:
+        sections.append(_emergency_confirmation_section(tracker.suspected_emergency))
 
     # Determine current phase
     phase = tracker.phase if tracker else "greeting"

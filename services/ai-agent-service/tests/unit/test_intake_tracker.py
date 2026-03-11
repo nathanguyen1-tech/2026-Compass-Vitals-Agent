@@ -443,3 +443,51 @@ class TestRelevantOldcarts:
         t.hpi["duration"] = "val"
         # HPI: 0.30 * (2/4) = 0.15
         assert t.get_completeness_score() == 0.15
+
+
+class TestSuspectedEmergency:
+    """Tests for suspected_emergency state and emergency confirmation markers."""
+
+    def test_fresh_tracker_no_suspected(self):
+        t = IntakeTracker()
+        assert t.suspected_emergency is None
+
+    def test_emergency_suspected_marker(self):
+        t = IntakeTracker()
+        t.update_field("emergency_suspected", "chest_pain_active")
+        assert t.suspected_emergency is not None
+        assert t.suspected_emergency["reason"] == "chest_pain_active"
+        assert t.suspected_emergency["confirmation_questions_asked"] == 0
+        assert t.suspected_emergency["source"] == "llm"
+
+    def test_emergency_confirmed_marker(self):
+        t = IntakeTracker()
+        t.update_field("emergency_suspected", "chest_pain_active")
+        t.update_field("emergency_confirmed", "severe_acs_confirmed")
+        assert t.emergency_detected_reason == "severe_acs_confirmed"
+
+    def test_emergency_cleared_marker(self):
+        t = IntakeTracker()
+        t.update_field("emergency_suspected", "chest_pain_active")
+        assert t.suspected_emergency is not None
+        t.update_field("emergency_cleared", "mild_resolved")
+        assert t.suspected_emergency is None
+
+    def test_serialization_preserves_suspected(self):
+        t = IntakeTracker()
+        t.suspected_emergency = {
+            "reason": "test_reason",
+            "confirmation_questions_asked": 1,
+            "source": "llm",
+        }
+        data = t.to_dict()
+        t2 = IntakeTracker(data=data)
+        assert t2.suspected_emergency is not None
+        assert t2.suspected_emergency["reason"] == "test_reason"
+        assert t2.suspected_emergency["confirmation_questions_asked"] == 1
+
+    def test_serialization_none_suspected(self):
+        t = IntakeTracker()
+        data = t.to_dict()
+        t2 = IntakeTracker(data=data)
+        assert t2.suspected_emergency is None

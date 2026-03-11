@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Compass Vitals — LLM Logs</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f0f2f5; min-height: 100vh; }
+
+        .nav { background: #1a1a2e; padding: 8px 24px; display: flex; gap: 16px; align-items: center; }
+        .nav a { color: #aaa; text-decoration: none; font-size: 13px; padding: 4px 12px; border-radius: 4px; }
+        .nav a:hover, .nav a.active { color: white; background: rgba(255,255,255,0.1); }
+        .nav-brand { color: white; font-weight: 700; font-size: 14px; margin-right: 16px; }
+
+        .header { background: linear-gradient(135deg, #0066cc, #004999); color: white; padding: 20px 24px; }
+        .header h1 { font-size: 20px; margin-bottom: 4px; }
+        .header p { font-size: 12px; opacity: 0.85; }
+
+        .content { max-width: 1200px; margin: 0 auto; padding: 24px; }
+
+        /* Stats cards */
+        .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 20px; }
+        .stat-card { background: white; border-radius: 10px; padding: 18px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); text-align: center; }
+        .stat-value { font-size: 28px; font-weight: 700; color: #1a1a2e; }
+        .stat-label { font-size: 11px; color: #888; margin-top: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+
+        /* Filter bar */
+        .filter-bar { display: flex; gap: 10px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; }
+        .filter-bar select { padding: 6px 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; background: white; min-width: 130px; }
+        .filter-bar select:focus { outline: none; border-color: #0066cc; }
+        .btn { padding: 6px 16px; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 600; }
+        .btn-primary { background: #0066cc; color: white; }
+        .btn-primary:hover { background: #0055aa; }
+        .btn-sm { padding: 5px 12px; font-size: 12px; }
+        .auto-refresh { display: flex; align-items: center; gap: 4px; font-size: 12px; color: #888; margin-left: auto; cursor: pointer; }
+        .auto-refresh input { cursor: pointer; }
+
+        /* Table card */
+        .card { background: white; border-radius: 10px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); overflow: hidden; }
+        .log-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        .log-table th { text-align: left; padding: 10px 14px; border-bottom: 2px solid #e0e0e0; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #888; background: #fafafa; }
+        .log-table td { padding: 10px 14px; border-bottom: 1px solid #f0f0f0; }
+        .log-table tbody tr:hover { background: #f8f9fa; cursor: pointer; }
+        .log-table tbody tr.selected { background: #e3f2fd; }
+        .empty-row { text-align: center; padding: 40px 20px !important; color: #999; font-size: 14px; }
+
+        .status-badge { padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; }
+        .status-success { background: #e8f5e9; color: #2e7d32; }
+        .status-error { background: #ffebee; color: #c62828; }
+        .latency-warn { color: #e65100; font-weight: 600; }
+        .model-badge { font-size: 12px; background: #f5f5f5; padding: 2px 8px; border-radius: 4px; font-family: monospace; }
+        .agent-badge { font-size: 11px; padding: 2px 8px; border-radius: 4px; font-weight: 600; }
+        .agent-intake { background: #e3f2fd; color: #0066cc; }
+        .agent-screening { background: #f3e5f5; color: #7b1fa2; }
+        .agent-proposer { background: #fff3e0; color: #e65100; }
+        .agent-critic { background: #e8f5e9; color: #2e7d32; }
+        .agent-soap { background: #e0f2f1; color: #00695c; }
+        .agent-clinical_summary_v2 { background: #fce4ec; color: #880e4f; }
+
+        /* Pagination */
+        .pagination { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-top: 1px solid #f0f0f0; font-size: 12px; color: #888; }
+        .pagination button { padding: 4px 12px; border: 1px solid #ddd; background: white; border-radius: 4px; cursor: pointer; font-size: 12px; }
+        .pagination button:hover:not(:disabled) { background: #f5f5f5; }
+        .pagination button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+        /* Detail panel overlay */
+        .detail-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.3); z-index: 99; display: none; }
+        .detail-overlay.open { display: block; }
+
+        /* Detail panel */
+        .detail-panel { position: fixed; top: 0; right: -560px; width: 560px; height: 100vh; background: white; box-shadow: -4px 0 20px rgba(0,0,0,0.15); z-index: 100; transition: right 0.3s ease; overflow-y: auto; }
+        .detail-panel.open { right: 0; }
+
+        .detail-header { padding: 16px 20px; border-bottom: 1px solid #eee; display: flex; align-items: center; gap: 10px; }
+        .detail-header .model-badge { font-size: 14px; padding: 4px 12px; }
+        .detail-close { margin-left: auto; background: none; border: none; font-size: 22px; cursor: pointer; color: #888; padding: 4px 8px; border-radius: 4px; }
+        .detail-close:hover { background: #f5f5f5; color: #333; }
+
+        .detail-body { padding: 20px; }
+        .detail-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px; }
+        .meta-item { font-size: 12px; }
+        .meta-label { color: #888; margin-bottom: 2px; }
+        .meta-value { font-weight: 600; color: #333; word-break: break-all; }
+
+        .token-bar { display: flex; height: 8px; border-radius: 4px; overflow: hidden; margin: 8px 0; background: #f0f0f0; }
+        .token-prompt { background: #0066cc; }
+        .token-completion { background: #4caf50; }
+        .token-legend { display: flex; gap: 16px; font-size: 11px; color: #888; }
+        .token-legend span::before { content: ''; display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 4px; vertical-align: middle; }
+        .token-legend .leg-prompt::before { background: #0066cc; }
+        .token-legend .leg-completion::before { background: #4caf50; }
+
+        .detail-section { margin-bottom: 20px; }
+        .detail-section-title { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #888; margin-bottom: 8px; padding-bottom: 4px; border-bottom: 1px solid #f0f0f0; }
+        .msg-block { margin-bottom: 12px; }
+        .msg-role { font-size: 11px; font-weight: 700; text-transform: uppercase; margin-bottom: 4px; }
+        .msg-role-system { color: #e65100; }
+        .msg-role-user { color: #0066cc; }
+        .msg-role-assistant { color: #2e7d32; }
+        .msg-content { background: #f8f9fa; border: 1px solid #eee; border-radius: 6px; padding: 10px 12px; font-size: 12px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; max-height: 300px; overflow-y: auto; font-family: 'SF Mono', 'Cascadia Code', 'Consolas', monospace; }
+        .msg-content.collapsed { max-height: 60px; overflow: hidden; position: relative; }
+        .msg-content.collapsed::after { content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 30px; background: linear-gradient(transparent, #f8f9fa); }
+        .msg-toggle { font-size: 11px; color: #0066cc; cursor: pointer; margin-top: 4px; display: inline-block; }
+        .msg-toggle:hover { text-decoration: underline; }
+
+        .error-block { background: #ffebee; border: 1px solid #ffcdd2; border-radius: 6px; padding: 10px 12px; font-size: 12px; color: #c62828; margin-bottom: 12px; }
+
+        @media (max-width: 768px) {
+            .stats-row { grid-template-columns: repeat(2, 1fr); }
+            .detail-panel { width: 100%; right: -100%; }
+            .content { padding: 16px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="nav">
+        <span class="nav-brand">Compass Vitals</span>
+        <a href="/">Chat</a>
+        <a href="/dashboard">Dashboard</a>
+        <a href="/clinical-summary">Clinical Summary</a>
+        <a href="/clinical-summary-v2">Summary v2</a>
+        <a href="/soap-note">SOAP Note</a>
+        <a href="/care-plan">Care Plan</a>
+        <a href="/logs" class="active">Logs</a>
+    </div>
+
+    <div class="header">
+        <h1>LLM Logs Dashboard</h1>
+        <p>Monitor all LLM API calls — request/response, tokens, latency, errors</p>
+    </div>
+
+    <div class="content">
+        <!-- Summary Stats -->
+        <div class="stats-row">
+            <div class="stat-card">
+                <div class="stat-value" id="statRequests">--</div>
+                <div class="stat-label">Total Requests</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="statTokens">--</div>
+                <div class="stat-label">Total Tokens</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="statLatency">--</div>
+                <div class="stat-label">Avg Latency</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="statErrors">--</div>
+                <div class="stat-label">Error Rate</div>
+            </div>
+        </div>
+
+        <!-- Filters -->
+        <div class="filter-bar">
+            <select id="filterModel"><option value="">All Models</option></select>
+            <select id="filterAgent"><option value="">All Agents</option></select>
+            <select id="filterStatus">
+                <option value="">All Status</option>
+                <option value="success">Success</option>
+                <option value="error">Error</option>
+            </select>
+            <button class="btn btn-primary btn-sm" onclick="loadLogs()">Apply</button>
+            <label class="auto-refresh">
+                <input type="checkbox" id="autoRefresh" onchange="toggleAutoRefresh()"> Auto-refresh (10s)
+            </label>
+        </div>
+
+        <!-- Log Table -->
+        <div class="card">
+            <table class="log-table">
+                <thead>
+                    <tr>
+                        <th>Time</th>
+                        <th>Model</th>
+                        <th>Agent</th>
+                        <th>Case ID</th>
+                        <th>Tokens</th>
+                        <th>Latency</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody id="logTableBody">
+                    <tr><td colspan="7" class="empty-row">No logs yet. Start a chat to generate LLM calls.</td></tr>
+                </tbody>
+            </table>
+            <div class="pagination">
+                <span id="pageInfo">--</span>
+                <div>
+                    <button onclick="prevPage()" id="btnPrev" disabled>Previous</button>
+                    <button onclick="nextPage()" id="btnNext" disabled>Next</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Detail Overlay -->
+    <div class="detail-overlay" id="detailOverlay" onclick="closeDetail()"></div>
+
+    <!-- Detail Panel -->
+    <div class="detail-panel" id="detailPanel">
+        <div class="detail-header">
+            <span class="model-badge" id="detailModel">--</span>
+            <span class="status-badge" id="detailStatus">--</span>
+            <button class="detail-close" onclick="closeDetail()">&times;</button>
+        </div>
+        <div class="detail-body" id="detailBody">
+            <!-- Populated by JS -->
+        </div>
+    </div>
+
+<script>
+const PAGE_SIZE = 50;
+let currentOffset = 0;
+let currentTotal = 0;
+let autoRefreshInterval = null;
+let selectedLogId = null;
+
+// --- Agent colors ---
+const AGENT_CLASSES = {
+    intake: 'agent-intake',
+    screening: 'agent-screening',
+    proposer: 'agent-proposer',
+    critic: 'agent-critic',
+    soap: 'agent-soap',
+    clinical_summary_v2: 'agent-clinical_summary_v2',
+};
+
+// --- Load stats ---
+async function loadStats() {
+    try {
+        const res = await fetch('/api/v1/logs/stats');
+        if (!res.ok) return;
+        const s = await res.json();
+        document.getElementById('statRequests').textContent = s.total_requests.toLocaleString();
+        document.getElementById('statTokens').textContent = s.total_tokens.toLocaleString();
+        document.getElementById('statLatency').textContent = s.avg_latency_ms.toFixed(0) + 'ms';
+        const errEl = document.getElementById('statErrors');
+        errEl.textContent = s.error_rate.toFixed(1) + '%';
+        errEl.style.color = s.error_rate > 5 ? '#c62828' : s.error_rate > 1 ? '#e65100' : '#2e7d32';
+    } catch (e) { /* ignore */ }
+}
+
+// --- Load filter options ---
+async function loadFilters() {
+    try {
+        const res = await fetch('/api/v1/logs/filters');
+        if (!res.ok) return;
+        const f = await res.json();
+        const ms = document.getElementById('filterModel');
+        const as = document.getElementById('filterAgent');
+        f.models.forEach(m => { const o = document.createElement('option'); o.value = m; o.textContent = m; ms.appendChild(o); });
+        f.agent_types.forEach(a => { const o = document.createElement('option'); o.value = a; o.textContent = a; as.appendChild(o); });
+    } catch (e) { /* ignore */ }
+}
+
+// --- Load logs ---
+async function loadLogs() {
+    const params = new URLSearchParams();
+    const model = document.getElementById('filterModel').value;
+    const agent = document.getElementById('filterAgent').value;
+    const status = document.getElementById('filterStatus').value;
+    if (model) params.set('model', model);
+    if (agent) params.set('agent_type', agent);
+    if (status) params.set('status', status);
+    params.set('limit', PAGE_SIZE);
+    params.set('offset', currentOffset);
+
+    try {
+        const res = await fetch('/api/v1/logs?' + params);
+        if (!res.ok) return;
+        const data = await res.json();
+        currentTotal = data.total;
+        renderTable(data.entries);
+        renderPagination();
+        loadStats();
+        // Refresh filter options in case new models/agents appeared
+        refreshFilters();
+    } catch (e) { /* ignore */ }
+}
+
+async function refreshFilters() {
+    try {
+        const res = await fetch('/api/v1/logs/filters');
+        if (!res.ok) return;
+        const f = await res.json();
+        updateSelect('filterModel', f.models);
+        updateSelect('filterAgent', f.agent_types);
+    } catch (e) { /* ignore */ }
+}
+
+function updateSelect(id, values) {
+    const sel = document.getElementById(id);
+    const current = sel.value;
+    const existing = new Set();
+    for (let i = 1; i < sel.options.length; i++) existing.add(sel.options[i].value);
+    values.forEach(v => {
+        if (!existing.has(v)) {
+            const o = document.createElement('option');
+            o.value = v; o.textContent = v;
+            sel.appendChild(o);
+        }
+    });
+    sel.value = current;
+}
+
+// --- Render table ---
+function renderTable(entries) {
+    const tbody = document.getElementById('logTableBody');
+    if (entries.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="empty-row">No logs match the current filters.</td></tr>';
+        return;
+    }
+    tbody.innerHTML = entries.map(e => {
+        const d = new Date(e.timestamp);
+        const time = d.toLocaleTimeString();
+        const date = d.toLocaleDateString();
+        const latencyClass = e.latency_ms > 5000 ? 'latency-warn' : '';
+        const statusClass = e.status === 'success' ? 'status-success' : 'status-error';
+        const agentClass = AGENT_CLASSES[e.agent_type] || '';
+        const sel = e.id === selectedLogId ? 'selected' : '';
+        return `<tr onclick="showDetail('${e.id}')" class="${sel}">
+            <td><div style="font-size:12px">${time}</div><div style="font-size:10px;color:#aaa">${date}</div></td>
+            <td><span class="model-badge">${e.model}</span></td>
+            <td><span class="agent-badge ${agentClass}">${e.agent_type}</span></td>
+            <td style="font-size:11px;color:#888;font-family:monospace">${e.case_id.substring(0, 8)}...</td>
+            <td>${e.total_tokens.toLocaleString()}</td>
+            <td class="${latencyClass}">${e.latency_ms.toFixed(0)}ms</td>
+            <td><span class="status-badge ${statusClass}">${e.status}</span></td>
+        </tr>`;
+    }).join('');
+}
+
+// --- Pagination ---
+function renderPagination() {
+    const start = currentTotal === 0 ? 0 : currentOffset + 1;
+    const end = Math.min(currentOffset + PAGE_SIZE, currentTotal);
+    document.getElementById('pageInfo').textContent = `Showing ${start}-${end} of ${currentTotal}`;
+    document.getElementById('btnPrev').disabled = currentOffset === 0;
+    document.getElementById('btnNext').disabled = currentOffset + PAGE_SIZE >= currentTotal;
+}
+
+function prevPage() { currentOffset = Math.max(0, currentOffset - PAGE_SIZE); loadLogs(); }
+function nextPage() { currentOffset += PAGE_SIZE; loadLogs(); }
+
+// --- Detail panel ---
+async function showDetail(logId) {
+    selectedLogId = logId;
+    try {
+        const res = await fetch('/api/v1/logs/' + logId);
+        if (!res.ok) return;
+        const e = await res.json();
+
+        // Header
+        const statusClass = e.status === 'success' ? 'status-success' : 'status-error';
+        document.getElementById('detailModel').textContent = e.model;
+        const statusEl = document.getElementById('detailStatus');
+        statusEl.textContent = e.status;
+        statusEl.className = 'status-badge ' + statusClass;
+
+        // Body
+        document.getElementById('detailBody').innerHTML = buildDetailHTML(e);
+
+        // Open
+        document.getElementById('detailPanel').classList.add('open');
+        document.getElementById('detailOverlay').classList.add('open');
+
+        // Re-highlight row
+        document.querySelectorAll('.log-table tbody tr').forEach(tr => tr.classList.remove('selected'));
+        document.querySelectorAll('.log-table tbody tr').forEach(tr => {
+            if (tr.getAttribute('onclick')?.includes(logId)) tr.classList.add('selected');
+        });
+    } catch (e) { /* ignore */ }
+}
+
+function buildDetailHTML(e) {
+    const d = new Date(e.timestamp);
+    const totalTok = e.prompt_tokens + e.completion_tokens;
+    const promptPct = totalTok > 0 ? (e.prompt_tokens / totalTok * 100) : 50;
+    const completionPct = totalTok > 0 ? (e.completion_tokens / totalTok * 100) : 50;
+
+    let html = `
+    <div class="detail-meta">
+        <div class="meta-item"><div class="meta-label">Agent Type</div><div class="meta-value">${e.agent_type}</div></div>
+        <div class="meta-item"><div class="meta-label">Timestamp</div><div class="meta-value">${d.toLocaleString()}</div></div>
+        <div class="meta-item"><div class="meta-label">Case ID</div><div class="meta-value">${e.case_id}</div></div>
+        <div class="meta-item"><div class="meta-label">Session ID</div><div class="meta-value">${e.session_id || '(none)'}</div></div>
+        <div class="meta-item"><div class="meta-label">Latency</div><div class="meta-value">${e.latency_ms.toFixed(1)}ms</div></div>
+        <div class="meta-item"><div class="meta-label">Finish Reason</div><div class="meta-value">${e.finish_reason}</div></div>
+        <div class="meta-item"><div class="meta-label">Temperature</div><div class="meta-value">${e.temperature}</div></div>
+        <div class="meta-item"><div class="meta-label">Max Tokens</div><div class="meta-value">${e.max_tokens.toLocaleString()}</div></div>
+    </div>`;
+
+    // Token breakdown
+    html += `
+    <div class="detail-section">
+        <div class="detail-section-title">Token Usage</div>
+        <div style="display:flex;gap:20px;font-size:13px;margin-bottom:6px">
+            <span><strong>${e.prompt_tokens.toLocaleString()}</strong> prompt</span>
+            <span><strong>${e.completion_tokens.toLocaleString()}</strong> completion</span>
+            <span><strong>${e.total_tokens.toLocaleString()}</strong> total</span>
+        </div>
+        <div class="token-bar">
+            <div class="token-prompt" style="width:${promptPct}%"></div>
+            <div class="token-completion" style="width:${completionPct}%"></div>
+        </div>
+        <div class="token-legend">
+            <span class="leg-prompt">Prompt</span>
+            <span class="leg-completion">Completion</span>
+        </div>
+    </div>`;
+
+    // Error
+    if (e.status === 'error' && e.error_message) {
+        html += `<div class="error-block">${escapeHtml(e.error_message)}</div>`;
+    }
+
+    // Request messages
+    html += `<div class="detail-section"><div class="detail-section-title">Request Messages</div>`;
+    if (e.request_messages && e.request_messages.length > 0) {
+        e.request_messages.forEach((msg, i) => {
+            const role = msg.role || 'unknown';
+            const roleClass = 'msg-role-' + role;
+            const content = msg.content || '';
+            const isSystem = role === 'system';
+            const collapsed = isSystem ? 'collapsed' : '';
+            const toggleId = 'toggle-' + i;
+            html += `
+            <div class="msg-block">
+                <div class="msg-role ${roleClass}">${role}</div>
+                <div class="msg-content ${collapsed}" id="msg-${i}">${escapeHtml(content)}</div>
+                ${isSystem ? `<span class="msg-toggle" id="${toggleId}" onclick="toggleMsg(${i}, '${toggleId}')">Show full</span>` : ''}
+            </div>`;
+        });
+    } else {
+        html += '<div style="color:#999;font-size:12px">No messages</div>';
+    }
+    html += '</div>';
+
+    // Response
+    html += `
+    <div class="detail-section">
+        <div class="detail-section-title">Response</div>
+        <div class="msg-content">${escapeHtml(e.response_content || '(empty)')}</div>
+    </div>`;
+
+    return html;
+}
+
+function toggleMsg(index, toggleId) {
+    const el = document.getElementById('msg-' + index);
+    const btn = document.getElementById(toggleId);
+    if (el.classList.contains('collapsed')) {
+        el.classList.remove('collapsed');
+        btn.textContent = 'Collapse';
+    } else {
+        el.classList.add('collapsed');
+        btn.textContent = 'Show full';
+    }
+}
+
+function closeDetail() {
+    document.getElementById('detailPanel').classList.remove('open');
+    document.getElementById('detailOverlay').classList.remove('open');
+    selectedLogId = null;
+    document.querySelectorAll('.log-table tbody tr').forEach(tr => tr.classList.remove('selected'));
+}
+
+// --- Auto-refresh ---
+function toggleAutoRefresh() {
+    if (document.getElementById('autoRefresh').checked) {
+        autoRefreshInterval = setInterval(loadLogs, 10000);
+    } else {
+        clearInterval(autoRefreshInterval);
+        autoRefreshInterval = null;
+    }
+}
+
+// --- Escape HTML ---
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// --- Init ---
+loadFilters();
+loadLogs();
+</script>
+</body>
+</html>

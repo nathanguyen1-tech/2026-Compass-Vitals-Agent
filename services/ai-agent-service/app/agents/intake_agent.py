@@ -24,8 +24,8 @@ from app.agents.prompts.intake_prompt import compose_intake_prompt
 from app.agents.state import CareFlowState
 from app.agents.tools.emergency_detector import (
     detect_contextual_red_flags,
-    detect_emergency_with_negation,
     detect_high_temperature,
+    detect_instant_emergency,
     get_emergency_keywords_found,
 )
 from app.agents.tools.intake_tracker import IntakeTracker, parse_intake_markers
@@ -69,12 +69,13 @@ async def intake_node(
     )
     tracker.message_count += 1
 
-    # === Step 1: Emergency Detection (keyword-based + negation + vital signs, fast path) ===
-    is_emergency = detect_emergency_with_negation(patient_text)
-    if is_emergency:
+    # === Step 1a: INSTANT Emergency Detection (small keyword set + vital signs) ===
+    # Only life-threatening conditions: unconscious, seizure, suicide, hemorrhage, overdose, ≥40°C
+    is_instant_emergency = detect_instant_emergency(patient_text)
+    if is_instant_emergency:
         emergency_keywords = get_emergency_keywords_found(patient_text)
         logger.warning(
-            "emergency.detected",
+            "emergency.instant",
             case_id=case_id,
             keywords=emergency_keywords,
         )
@@ -108,7 +109,18 @@ async def intake_node(
             "intake_tracker": tracker.to_dict(),
         }
 
-    # === Step 1b: Contextual red flag detection ===
+    # === Step 1b: Suspected emergency — increment confirmation counter ===
+    if tracker.suspected_emergency is not None:
+        tracker.suspected_emergency["confirmation_questions_asked"] += 1
+        asked = tracker.suspected_emergency["confirmation_questions_asked"]
+        logger.info(
+            "emergency.confirmation_turn",
+            case_id=case_id,
+            asked=asked,
+            reason=tracker.suspected_emergency["reason"],
+        )
+
+    # === Step 1c: Contextual red flag detection ===
     # During red_flag_screening: only check current message (no history)
     # to avoid false positives from the LLM's own screening questions.
     # Other phases: check current message normally (history is optional).
@@ -211,35 +223,116 @@ async def intake_node(
     for field, value in extracted_fields.items():
         tracker.update_field(field, value)
 
-    # === Step 6.55: LLM-detected emergency override (Tier 3) ===
-    if "emergency_detected" in extracted_fields:
-        llm_emergency_reason = extracted_fields["emergency_detected"]
-        logger.warning(
-            "emergency.llm_detected",
+    # === Step 6.55: LLM emergency marker handling ===
+
+    # Handle emergency_suspected: LLM just detected something suspicious
+    if "emergency_suspected" in extracted_fields:
+        reason = extracted_fields["emergency_suspected"]
+        logger.info(
+            "emergency.suspected",
             case_id=case_id,
-            reason=llm_emergency_reason,
+            reason=reason,
         )
-        emergency_content = (
-            "\u26a0\ufe0f C\u1ea2NH B\u00c1O KH\u1ea8N C\u1ea4P:\n\n"
-            "D\u1ef1a tr\u00ean nh\u1eefng g\u00ec b\u1ea1n m\u00f4 t\u1ea3, ch\u00fang t\u00f4i nh\u1eadn th\u1ea5y c\u00e1c tri\u1ec7u ch\u1ee9ng "
-            "c\u1ea7n \u0111\u01b0\u1ee3c \u0111\u00e1nh gi\u00e1 y t\u1ebf NGAY L\u1eacP T\u1ee8C.\n\n"
-            "Vui l\u00f2ng g\u1ecdi 911 ho\u1eb7c \u0111\u1ebfn ph\u00f2ng c\u1ea5p c\u1ee9u g\u1ea7n nh\u1ea5t ngay. "
-            "\u0110\u1eebng ch\u1edd \u0111\u1ee3i \u2014 s\u1ee9c kh\u1ecfe c\u1ee7a b\u1ea1n l\u00e0 \u01b0u ti\u00ean h\u00e0ng \u0111\u1ea7u.\n\n"
-            "\u26a0\ufe0f EMERGENCY ALERT:\n\n"
-            "Based on what you've described, we've identified symptoms that "
-            "require IMMEDIATE medical evaluation.\n\n"
-            "Please call 911 or go to the nearest emergency room immediately. "
-            "Do not wait \u2014 your health is the top priority."
-        )
+        # tracker.update_field already set suspected_emergency via marker parsing above
+        # LLM response already contains the first confirmation question
+        # Return normal (NOT emergency) — let the conversation continue
         return {
-            "is_emergency": True,
-            "messages": [AIMessage(content=emergency_content)],
-            "intake_tracker": tracker.to_dict(),
-            "intake_data": tracker.to_intake_data(),
+            "messages": [AIMessage(content=ai_response_text)],
             "detected_language": detected_language,
             "cultural_expressions": state.get("cultural_expressions", []) + cultural_expressions,
+            "is_emergency": False,
             "updated_at": datetime.now(timezone.utc).isoformat(),
+            "intake_tracker": tracker.to_dict(),
+            "intake_data": tracker.to_intake_data() if tracker.to_intake_data() else None,
+            "intake_complete": False,
         }
+
+    # Handle emergency_confirmed: LLM confirmed after 2+ questions
+    if "emergency_confirmed" in extracted_fields:
+        llm_emergency_reason = extracted_fields["emergency_confirmed"]
+        asked = (
+            tracker.suspected_emergency.get("confirmation_questions_asked", 0)
+            if tracker.suspected_emergency
+            else 0
+        )
+        # Only escalate if at least 2 confirmation questions were asked
+        if asked >= 2:
+            logger.warning(
+                "emergency.confirmed",
+                case_id=case_id,
+                reason=llm_emergency_reason,
+                questions_asked=asked,
+            )
+            tracker.suspected_emergency = None  # Clear the investigation
+            return _llm_emergency_response(tracker, detected_language, cultural_expressions, state)
+        else:
+            # Not enough questions yet — keep investigating
+            logger.info(
+                "emergency.confirmed_too_early",
+                case_id=case_id,
+                reason=llm_emergency_reason,
+                questions_asked=asked,
+            )
+            # Keep suspected_emergency active, return LLM response (which has a question)
+            return {
+                "messages": [AIMessage(content=ai_response_text)],
+                "detected_language": detected_language,
+                "cultural_expressions": state.get("cultural_expressions", []) + cultural_expressions,
+                "is_emergency": False,
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+                "intake_tracker": tracker.to_dict(),
+                "intake_data": tracker.to_intake_data() if tracker.to_intake_data() else None,
+                "intake_complete": False,
+            }
+
+    # Handle emergency_cleared: LLM determined it's not an emergency
+    if "emergency_cleared" in extracted_fields:
+        logger.info(
+            "emergency.cleared",
+            case_id=case_id,
+            reason=extracted_fields["emergency_cleared"],
+        )
+        # tracker.update_field already cleared suspected_emergency
+        # Continue with normal intake flow below
+
+    # Handle legacy emergency_detected marker (backward compat) — treat as suspected
+    if "emergency_detected" in extracted_fields:
+        reason = extracted_fields["emergency_detected"]
+        logger.info(
+            "emergency.detected_legacy_as_suspected",
+            case_id=case_id,
+            reason=reason,
+        )
+        # Treat like emergency_suspected: set tracker and continue
+        tracker.suspected_emergency = {
+            "reason": reason,
+            "confirmation_questions_asked": 0,
+            "source": "llm",
+        }
+        return {
+            "messages": [AIMessage(content=ai_response_text)],
+            "detected_language": detected_language,
+            "cultural_expressions": state.get("cultural_expressions", []) + cultural_expressions,
+            "is_emergency": False,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "intake_tracker": tracker.to_dict(),
+            "intake_data": tracker.to_intake_data() if tracker.to_intake_data() else None,
+            "intake_complete": False,
+        }
+
+    # === Step 6.56: Safety fallback — force escalate if too many turns without decision ===
+    if (
+        tracker.suspected_emergency is not None
+        and tracker.suspected_emergency.get("confirmation_questions_asked", 0) >= 3
+    ):
+        logger.warning(
+            "emergency.safety_fallback",
+            case_id=case_id,
+            reason=tracker.suspected_emergency.get("reason"),
+            questions_asked=tracker.suspected_emergency["confirmation_questions_asked"],
+        )
+        tracker.suspected_emergency = None
+        return _llm_emergency_response(tracker, detected_language, cultural_expressions, state)
 
     # === Step 6.6: Auto-advance phase based on tracker state ===
     if tracker.is_minimum_complete() and tracker.phase not in ("summary", "complete"):
@@ -287,6 +380,36 @@ def _initial_greeting(state: CareFlowState) -> dict:
         "detected_language": "vi",
         "is_emergency": False,
         "intake_tracker": tracker.to_dict(),
+    }
+
+
+def _llm_emergency_response(
+    tracker: IntakeTracker,
+    detected_language: str,
+    cultural_expressions: list,
+    state: dict,
+) -> dict:
+    """Return emergency response after LLM confirmation flow completes."""
+    emergency_content = (
+        "\u26a0\ufe0f C\u1ea2NH B\u00c1O KH\u1ea8N C\u1ea4P:\n\n"
+        "D\u1ef1a tr\u00ean nh\u1eefng g\u00ec b\u1ea1n m\u00f4 t\u1ea3, ch\u00fang t\u00f4i nh\u1eadn th\u1ea5y c\u00e1c tri\u1ec7u ch\u1ee9ng "
+        "c\u1ea7n \u0111\u01b0\u1ee3c \u0111\u00e1nh gi\u00e1 y t\u1ebf NGAY L\u1eacP T\u1ee8C.\n\n"
+        "Vui l\u00f2ng g\u1ecdi 911 ho\u1eb7c \u0111\u1ebfn ph\u00f2ng c\u1ea5p c\u1ee9u g\u1ea7n nh\u1ea5t ngay. "
+        "\u0110\u1eebng ch\u1edd \u0111\u1ee3i \u2014 s\u1ee9c kh\u1ecfe c\u1ee7a b\u1ea1n l\u00e0 \u01b0u ti\u00ean h\u00e0ng \u0111\u1ea7u.\n\n"
+        "\u26a0\ufe0f EMERGENCY ALERT:\n\n"
+        "Based on what you've described, we've identified symptoms that "
+        "require IMMEDIATE medical evaluation.\n\n"
+        "Please call 911 or go to the nearest emergency room immediately. "
+        "Do not wait \u2014 your health is the top priority."
+    )
+    return {
+        "is_emergency": True,
+        "messages": [AIMessage(content=emergency_content)],
+        "intake_tracker": tracker.to_dict(),
+        "intake_data": tracker.to_intake_data(),
+        "detected_language": detected_language,
+        "cultural_expressions": state.get("cultural_expressions", []) + cultural_expressions,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
     }
 
 

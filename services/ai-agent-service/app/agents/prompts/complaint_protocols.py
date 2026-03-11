@@ -7,7 +7,20 @@ Based on clinical-intake-protocol.md.
 
 from __future__ import annotations
 
+import unicodedata
 from typing import TypedDict
+
+
+def _strip_vietnamese_diacritics(text: str) -> str:
+    """Remove Vietnamese diacritics for keyword matching.
+
+    Examples: 'đau ngực' → 'dau nguc', 'khó thở' → 'kho tho'
+    """
+    # Handle đ/Đ separately (not decomposable by NFD)
+    text = text.replace("đ", "d").replace("Đ", "D")
+    # Decompose + strip combining marks
+    nfkd = unicodedata.normalize("NFKD", text)
+    return "".join(c for c in nfkd if not unicodedata.combining(c))
 
 
 # === Data Types ===
@@ -154,6 +167,7 @@ PROTOCOLS: dict[str, ComplaintProtocol] = {
             "nghet mui", "chay nuoc mui", "dam", "viem hong",
             "trung gio",
             "sot", "sốt", "nhiet do cao", "lanh run", "ớn lạnh",
+            "kho tho", "kho tho duoc",  # dyspnea / respiratory distress
         ],
         "hpi_additions": [
             "Fever? Maximum temperature?",
@@ -358,11 +372,13 @@ PROTOCOLS: dict[str, ComplaintProtocol] = {
             "depressed", "depression", "anxiety", "anxious", "can't sleep",
             "insomnia", "sad", "stressed", "panic", "worry",
             "hopeless", "no energy", "don't want to live",
+            "suicide", "suicidal", "want to die",
         ],
         "keywords_vi": [
             "tram cam", "lo au", "mat ngu", "buon", "stress",
-            "met moi", "khong muon song", "chan nan", "tuyet vong",
+            "khong muon song", "chan nan", "tuyet vong",
             "lo lang", "hoang loan", "khong ngu duoc",
+            "tu tu", "muon chet",
         ],
         "hpi_additions": [
             "PHQ-2: Have you lost interest in things you used to enjoy?",
@@ -547,10 +563,12 @@ PROTOCOLS: dict[str, ComplaintProtocol] = {
         "keywords_en": [
             "chest pain", "chest tightness", "chest pressure",
             "chest hurts", "heart pain",
+            "shortness of breath", "difficulty breathing",
         ],
         "keywords_vi": [
             "dau nguc", "tuc nguc", "nang nguc", "dau tim",
             "dau nguc trai",
+            "kho tho",  # dyspnea often presents with chest pain
         ],
         "hpi_additions": [
             "SAFETY Q1: Is the chest pain happening RIGHT NOW?",
@@ -651,9 +669,11 @@ def classify_chief_complaint(text: str) -> str:
 
     Uses keyword matching against each protocol's keywords.
     Scores by total matched keyword character length (longer matches = more specific).
+    Supports both Vietnamese with diacritics and ASCII-folded input.
     Returns protocol ID (e.g., "hypertension", "chest_pain") or "general" if no match.
     """
     text_lower = text.lower()
+    text_ascii = _strip_vietnamese_diacritics(text_lower)
 
     # Check each protocol's keywords
     best_match: str | None = None
@@ -667,7 +687,8 @@ def classify_chief_complaint(text: str) -> str:
             # from partial word matches (e.g., "oi" in "toi", "met" in "something")
             if len(kw_lower) < 3:
                 continue
-            if kw_lower in text_lower:
+            # Match against both original text and ASCII-folded version
+            if kw_lower in text_lower or kw_lower in text_ascii:
                 # Weight by keyword length — longer = more specific
                 score += len(kw_lower)
         if score > best_score:

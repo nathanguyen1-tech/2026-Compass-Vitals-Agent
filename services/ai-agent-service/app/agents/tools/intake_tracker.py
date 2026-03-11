@@ -120,6 +120,10 @@ class IntakeTracker:
         # LLM-detected emergency (Tier 3)
         self.emergency_detected_reason: str | None = None
 
+        # Suspected emergency — 2-question confirmation flow
+        # When set: {"reason": "...", "confirmation_questions_asked": 0, "source": "llm"}
+        self.suspected_emergency: dict | None = None
+
         # Apply pre-existing history
         if existing_history:
             self._apply_existing_history(existing_history)
@@ -191,6 +195,8 @@ class IntakeTracker:
 
         self.emergency_detected_reason = data.get("emergency_detected_reason")
 
+        self.suspected_emergency = data.get("suspected_emergency")
+
     def to_dict(self) -> dict:
         """Serialize tracker state for session storage."""
         return {
@@ -219,6 +225,7 @@ class IntakeTracker:
             "social_family_prefilled": self.social_family_prefilled,
             "summary_confirmed": self.summary_confirmed,
             "emergency_detected_reason": self.emergency_detected_reason,
+            "suspected_emergency": self.suspected_emergency,
         }
 
     # === Field Updates ===
@@ -299,9 +306,26 @@ class IntakeTracker:
             self.summary_confirmed = True
             return
 
-        # LLM-detected emergency (Tier 3)
+        # LLM-detected emergency (Tier 3) — backward compatible
         if field == "emergency_detected":
             self.emergency_detected_reason = value
+            return
+
+        # Emergency confirmation flow — 2-question protocol
+        if field == "emergency_suspected":
+            self.suspected_emergency = {
+                "reason": value,
+                "confirmation_questions_asked": 0,
+                "source": "llm",
+            }
+            return
+
+        if field == "emergency_confirmed":
+            self.emergency_detected_reason = value
+            return
+
+        if field == "emergency_cleared":
+            self.suspected_emergency = None
             return
 
     # === Complaint-Aware OLDCARTS ===

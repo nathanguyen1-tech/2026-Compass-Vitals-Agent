@@ -94,22 +94,103 @@ def detect_high_temperature(text: str) -> dict | None:
     return None
 
 
+# === INSTANT emergency keywords (life-threatening, no confirmation needed) ===
+# Only conditions where delaying 1 minute = risk of death.
+# Everything else is handled by the LLM with 2-question confirmation.
+
+EMERGENCY_KEYWORDS_INSTANT_VI = [
+    # Loss of consciousness / seizure
+    "mất ý thức", "mat y thuc",  # ASCII-folded
+    "bất tỉnh", "bat tinh",  # ASCII-folded
+    "hôn mê", "hon me",  # ASCII-folded
+    "co giật", "co giat",  # ASCII-folded
+    # Suicide / self-harm
+    "tự tử", "tu tu",  # ASCII-folded
+    "muốn chết", "muon chet",  # ASCII-folded
+    "không muốn sống", "khong muon song",  # ASCII-folded
+    # GI hemorrhage
+    "ói ra máu", "oi ra mau",  # ASCII-folded
+    "nôn ra máu", "non ra mau",  # ASCII-folded
+    "đi cầu ra máu", "di cau ra mau",  # ASCII-folded
+    # Overdose
+    "uống thuốc quá liều", "uong thuoc qua lieu",  # ASCII-folded
+]
+
+EMERGENCY_KEYWORDS_INSTANT_EN = [
+    # Loss of consciousness / seizure
+    "unconscious", "loss of consciousness", "seizure",
+    # Suicide / self-harm
+    "want to die", "kill myself", "suicide",
+    # GI hemorrhage
+    "vomiting blood", "bloody stool", "coughing blood",
+    # Anaphylaxis
+    "anaphylaxis",
+    # Overdose
+    "overdose",
+]
+
+
+def detect_instant_emergency(text: str) -> bool:
+    """Check for INSTANT-only emergencies (small keyword set + vital signs).
+
+    These are life-threatening conditions where delaying even 1 minute is dangerous.
+    Everything else (chest pain, difficulty breathing, etc.) goes through LLM
+    with 2-question confirmation flow.
+
+    Negation-aware: "I do NOT want to die" won't trigger.
+    Vital signs (temperature ≥40°C) always trigger regardless of negation.
+    """
+    text_lower = text.lower()
+
+    for keyword in EMERGENCY_KEYWORDS_INSTANT_VI + EMERGENCY_KEYWORDS_INSTANT_EN:
+        kw_lower = keyword.lower()
+        if kw_lower not in text_lower:
+            continue
+        if not _is_negated(text_lower, kw_lower):
+            return True
+
+    # Vital signs always trigger (temperature ≥40°C / ≥104°F)
+    if detect_high_temperature(text) is not None:
+        return True
+
+    return False
+
+
 # === Tier 1: Keyword-based detection (backward compatible) ===
 
 EMERGENCY_KEYWORDS_VI = [
-    "đau ngực", "khó thở", "không thở được", "tê nửa người",
-    "mất ý thức", "bất tỉnh", "chảy máu nhiều", "co giật",
-    "đau ngực trái", "đau lan ra cánh tay", "đột ngột yếu nửa người",
-    "méo miệng", "nói ngọng đột ngột", "mất thị lực đột ngột",
-    "ngất", "ngất xỉu", "hôn mê",
+    # Cardiac / Respiratory
+    "đau ngực", "dau nguc",  # ASCII-folded
+    "khó thở", "kho tho",  # ASCII-folded
+    "không thở được", "khong tho duoc",  # ASCII-folded
+    "tê nửa người", "te nua nguoi",  # ASCII-folded
+    "đau ngực trái", "dau nguc trai",  # ASCII-folded
+    "đau lan ra cánh tay", "dau lan ra canh tay",  # ASCII-folded
+    # Neurological
+    "đột ngột yếu nửa người", "dot ngot yeu nua nguoi",  # ASCII-folded
+    "méo miệng", "meo mieng",  # ASCII-folded
+    "nói ngọng đột ngột", "noi ngong dot ngot",  # ASCII-folded
+    "mất thị lực đột ngột", "mat thi luc dot ngot",  # ASCII-folded
+    # Loss of consciousness
+    "mất ý thức", "mat y thuc",  # ASCII-folded
+    "bất tỉnh", "bat tinh",  # ASCII-folded
+    "ngất", "ngat",  # ASCII-folded
+    "ngất xỉu", "ngat xiu",  # ASCII-folded
+    "hôn mê", "hon me",  # ASCII-folded
+    # Bleeding / seizure
+    "chảy máu nhiều", "chay mau nhieu",  # ASCII-folded
+    "co giật", "co giat",  # ASCII-folded
     # Suicide / self-harm
-    "tự tử", "muốn chết", "không muốn sống",
-    "muon chet", "khong muon song",  # ASCII-folded
+    "tự tử", "tu tu",  # ASCII-folded
+    "muốn chết", "muon chet",  # ASCII-folded
+    "không muốn sống", "khong muon song",  # ASCII-folded
     # GI hemorrhage
-    "ói ra máu", "nôn ra máu", "đi cầu ra máu",
-    "oi ra mau", "non ra mau", "di cau ra mau",  # ASCII-folded
+    "ói ra máu", "oi ra mau",  # ASCII-folded
+    "nôn ra máu", "non ra mau",  # ASCII-folded
+    "đi cầu ra máu", "di cau ra mau",  # ASCII-folded
     # Anaphylaxis
-    "sưng họng", "phù mặt",
+    "sưng họng", "sung hong",  # ASCII-folded
+    "phù mặt", "phu mat",  # ASCII-folded
     # Overdose
     "uống thuốc quá liều", "uong thuoc qua lieu",  # ASCII-folded
 ]
