@@ -124,6 +124,11 @@ class IntakeTracker:
         # When set: {"reason": "...", "confirmation_questions_asked": 0, "source": "llm"}
         self.suspected_emergency: dict | None = None
 
+        # Continuous risk assessment (LLM-driven)
+        self.risk_level: str = "low"  # low | moderate | high | critical
+        self.risk_history: list[str] = []  # History of risk levels per turn
+        self.risk_reasoning: str = ""  # Latest clinical reasoning
+
         # Apply pre-existing history
         if existing_history:
             self._apply_existing_history(existing_history)
@@ -197,6 +202,10 @@ class IntakeTracker:
 
         self.suspected_emergency = data.get("suspected_emergency")
 
+        self.risk_level = data.get("risk_level", "low")
+        self.risk_history = data.get("risk_history", [])
+        self.risk_reasoning = data.get("risk_reasoning", "")
+
     def to_dict(self) -> dict:
         """Serialize tracker state for session storage."""
         return {
@@ -226,6 +235,9 @@ class IntakeTracker:
             "summary_confirmed": self.summary_confirmed,
             "emergency_detected_reason": self.emergency_detected_reason,
             "suspected_emergency": self.suspected_emergency,
+            "risk_level": self.risk_level,
+            "risk_history": list(self.risk_history),
+            "risk_reasoning": self.risk_reasoning,
         }
 
     # === Field Updates ===
@@ -327,6 +339,30 @@ class IntakeTracker:
         if field == "emergency_cleared":
             self.suspected_emergency = None
             return
+
+        # Continuous risk assessment
+        if field == "risk_level":
+            valid_levels = ("low", "moderate", "high", "critical")
+            if value.lower() in valid_levels:
+                self.risk_level = value.lower()
+                self.risk_history.append(self.risk_level)
+            return
+
+        if field == "risk_reasoning":
+            self.risk_reasoning = value
+            return
+
+    # === Risk-Based Auto-Escalation ===
+
+    def should_auto_escalate(self) -> bool:
+        """Auto-escalate if risk stays high/critical for 2+ consecutive turns.
+
+        This catches cases where the LLM detects danger through clinical reasoning
+        but doesn't explicitly emit emergency_suspected markers.
+        """
+        if len(self.risk_history) < 2:
+            return False
+        return all(r in ("high", "critical") for r in self.risk_history[-2:])
 
     # === Complaint-Aware OLDCARTS ===
 

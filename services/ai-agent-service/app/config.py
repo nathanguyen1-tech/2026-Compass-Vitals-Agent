@@ -37,6 +37,9 @@ class Settings(BaseSettings):
     tts_voice: str = "Kore"
     voice_session_max_minutes: int = 15
 
+    # Safety Classifier (Layer 1.5 — LLM-based emergency detection)
+    safety_classifier_enabled: bool = True
+
     # Ngrok (optional tunneling)
     ngrok_authtoken: str = ""
 

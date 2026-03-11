@@ -24,11 +24,14 @@ from app.agents.prompts.intake_prompt import compose_intake_prompt
 from app.agents.state import CareFlowState
 from app.agents.tools.emergency_detector import (
     detect_contextual_red_flags,
+    detect_emergency_with_negation,
     detect_high_temperature,
     detect_instant_emergency,
     get_emergency_keywords_found,
 )
 from app.agents.tools.intake_tracker import IntakeTracker, parse_intake_markers
+from app.agents.tools.safety_classifier import classify_safety, should_run_classifier
+from app.config import settings
 from app.domain.services.llm_gateway import LLMGateway
 from app.domain.services.phi_deidentifier import PHIDeidentifier
 from app.nlp.code_switcher import CodeSwitcher
@@ -107,6 +110,22 @@ async def intake_node(
             "is_emergency": True,
             "messages": [AIMessage(content=emergency_content)],
             "intake_tracker": tracker.to_dict(),
+        }
+
+    # === Step 1a.5: Broad keyword detection → pre-flag as suspected ===
+    # Catches trauma, chest pain, difficulty breathing etc. that aren't instant
+    # but should trigger LLM confirmation flow (2-question investigation).
+    if tracker.suspected_emergency is None and detect_emergency_with_negation(patient_text):
+        broad_keywords = get_emergency_keywords_found(patient_text)
+        logger.info(
+            "emergency.broad_keyword_suspected",
+            case_id=case_id,
+            keywords=broad_keywords,
+        )
+        tracker.suspected_emergency = {
+            "reason": f"keyword_detected: {', '.join(broad_keywords[:3])}",
+            "confirmation_questions_asked": 0,
+            "source": "broad_keyword",
         }
 
     # === Step 1b: Suspected emergency — increment confirmation counter ===
@@ -223,6 +242,63 @@ async def intake_node(
     for field, value in extracted_fields.items():
         tracker.update_field(field, value)
 
+    # === Step 6.52: Safety Classifier (Layer 1.5) ===
+    # Run dedicated safety classifier when keyword layers missed AND
+    # primary LLM risk assessment is absent/low.
+    if settings.safety_classifier_enabled:
+        keyword_was_detected = (
+            is_instant_emergency
+            or (
+                tracker.suspected_emergency is not None
+                and tracker.suspected_emergency.get("source") == "broad_keyword"
+            )
+        )
+        llm_risk = extracted_fields.get("risk_level")
+
+        if should_run_classifier(keyword_was_detected, llm_risk, tracker.message_count):
+            safety_result = await classify_safety(
+                patient_message=patient_text,
+                complaint_category=tracker.complaint_category,
+                llm_gateway=llm_gateway,
+                case_id=case_id,
+            )
+
+            if safety_result:
+                logger.info(
+                    "safety_classifier.result",
+                    case_id=case_id,
+                    risk_level=safety_result.risk_level,
+                    is_emergency=safety_result.is_emergency,
+                    category=safety_result.category,
+                )
+
+                if safety_result.risk_level in ("high", "critical"):
+                    if tracker.risk_level not in ("high", "critical"):
+                        tracker.risk_level = safety_result.risk_level
+                        tracker.risk_history.append(safety_result.risk_level)
+                        tracker.risk_reasoning = (
+                            f"[safety_classifier] {safety_result.reasoning}"
+                        )
+
+                    if (
+                        safety_result.is_emergency
+                        and tracker.suspected_emergency is None
+                    ):
+                        logger.warning(
+                            "safety_classifier.emergency_detected",
+                            case_id=case_id,
+                            category=safety_result.category,
+                            reasoning=safety_result.reasoning,
+                        )
+                        tracker.suspected_emergency = {
+                            "reason": (
+                                f"safety_classifier: {safety_result.category}"
+                                f" - {safety_result.reasoning}"
+                            ),
+                            "confirmation_questions_asked": 0,
+                            "source": "safety_classifier",
+                        }
+
     # === Step 6.55: LLM emergency marker handling ===
 
     # Handle emergency_suspected: LLM just detected something suspicious
@@ -320,7 +396,24 @@ async def intake_node(
             "intake_complete": False,
         }
 
-    # === Step 6.56: Safety fallback — force escalate if too many turns without decision ===
+    # === Step 6.56a: Risk-based auto-escalation ===
+    # If LLM reports high/critical risk for 2+ consecutive turns but hasn't
+    # explicitly emitted emergency_suspected, auto-trigger the confirmation flow.
+    if tracker.should_auto_escalate() and tracker.suspected_emergency is None:
+        logger.warning(
+            "emergency.auto_suspected_from_risk",
+            case_id=case_id,
+            risk_level=tracker.risk_level,
+            risk_reasoning=tracker.risk_reasoning,
+            risk_history=tracker.risk_history[-3:],
+        )
+        tracker.suspected_emergency = {
+            "reason": f"sustained_high_risk: {tracker.risk_reasoning}",
+            "confirmation_questions_asked": 0,
+            "source": "risk_monitor",
+        }
+
+    # === Step 6.56b: Safety fallback — force escalate if too many turns without decision ===
     if (
         tracker.suspected_emergency is not None
         and tracker.suspected_emergency.get("confirmation_questions_asked", 0) >= 3

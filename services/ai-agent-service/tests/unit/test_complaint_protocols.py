@@ -203,3 +203,48 @@ class TestFeverClassifiesAsURICough:
 
     def test_nhiet_do_cao(self):
         assert classify_chief_complaint("nhiet do cao qua") == "uri_cough"
+
+
+class TestClinicalReasoning:
+    """All protocols should have clinical_reasoning for LLM decision support."""
+
+    def test_all_protocols_have_clinical_reasoning(self):
+        for pid, protocol in PROTOCOLS.items():
+            assert "clinical_reasoning" in protocol, (
+                f"Protocol '{pid}' missing 'clinical_reasoning'"
+            )
+
+    def test_fallback_has_clinical_reasoning(self):
+        assert "clinical_reasoning" in FALLBACK_PROTOCOL
+
+    def test_clinical_reasoning_has_required_keys(self):
+        required_keys = {"risk_stratification", "investigation_strategy", "danger_combinations"}
+        for pid, protocol in PROTOCOLS.items():
+            cr = protocol["clinical_reasoning"]
+            for key in required_keys:
+                assert key in cr, (
+                    f"Protocol '{pid}' clinical_reasoning missing key '{key}'"
+                )
+
+    def test_danger_combinations_are_lists(self):
+        for pid, protocol in PROTOCOLS.items():
+            combos = protocol["clinical_reasoning"]["danger_combinations"]
+            assert isinstance(combos, list), f"{pid} danger_combinations must be a list"
+            assert len(combos) >= 2, f"{pid} should have at least 2 danger combinations"
+
+    def test_chest_pain_has_most_danger_combinations(self):
+        """Chest pain is highest-stakes — should have the most danger combos."""
+        chest = PROTOCOLS["chest_pain"]["clinical_reasoning"]["danger_combinations"]
+        assert len(chest) >= 5
+
+    def test_mental_health_has_mandatory_safety_screening(self):
+        """Mental health protocol must mention mandatory safety screening."""
+        mh = PROTOCOLS["mental_health"]["clinical_reasoning"]
+        assert "MANDATORY" in mh["investigation_strategy"].upper()
+
+    def test_pmh_modifiers_present_in_key_protocols(self):
+        """High-risk protocols should have pmh_modifiers."""
+        for pid in ("chest_pain", "headache", "diabetes", "abdominal_gi"):
+            cr = PROTOCOLS[pid]["clinical_reasoning"]
+            assert "pmh_modifiers" in cr, f"{pid} should have pmh_modifiers"
+            assert len(cr["pmh_modifiers"]) >= 1

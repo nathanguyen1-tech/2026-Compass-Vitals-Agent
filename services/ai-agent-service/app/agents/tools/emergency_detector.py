@@ -114,6 +114,10 @@ EMERGENCY_KEYWORDS_INSTANT_VI = [
     "đi cầu ra máu", "di cau ra mau",  # ASCII-folded
     # Overdose
     "uống thuốc quá liều", "uong thuoc qua lieu",  # ASCII-folded
+    # Critical trauma
+    "bị bắn", "bi ban",  # shot/gunshot
+    "đuối nước", "duoi nuoc",  # drowning
+    "bị nghẹn", "bi nghen",  # choking
 ]
 
 EMERGENCY_KEYWORDS_INSTANT_EN = [
@@ -127,6 +131,10 @@ EMERGENCY_KEYWORDS_INSTANT_EN = [
     "anaphylaxis",
     # Overdose
     "overdose",
+    # Critical trauma
+    "gunshot", "shot in the",
+    "choking", "can't swallow",
+    "near drowning",
 ]
 
 
@@ -193,6 +201,24 @@ EMERGENCY_KEYWORDS_VI = [
     "phù mặt", "phu mat",  # ASCII-folded
     # Overdose
     "uống thuốc quá liều", "uong thuoc qua lieu",  # ASCII-folded
+    # Trauma / Falls / Accidents
+    "rơi từ", "roi tu",  # fell from (rơi từ lầu 2, rơi từ tầng 3...)
+    "ngã từ", "nga tu",  # fell from (ngã từ cầu thang...)
+    "rơi xuống", "roi xuong",  # fell down
+    "ngã cầu thang", "nga cau thang",  # fell down stairs
+    "ngã từ trên cao", "nga tu tren cao",  # fell from height
+    "tai nạn xe", "tai nan xe",  # vehicle accident
+    "tai nạn giao thông", "tai nan giao thong",  # traffic accident
+    "bị xe đâm", "bi xe dam",  # hit by vehicle
+    "bị đâm", "bi dam",  # stabbed
+    "bị bắn", "bi ban",  # shot
+    "chấn thương đầu", "chan thuong dau",  # head injury
+    "gãy xương", "gay xuong",  # broken bone
+    "bị điện giật", "bi dien giat",  # electric shock
+    "đuối nước", "duoi nuoc",  # drowning
+    "bị bỏng", "bi bong",  # burned
+    "bị nghẹn", "bi nghen",  # choking
+    "bị kẹt", "bi ket",  # trapped/crushed
 ]
 
 EMERGENCY_KEYWORDS_EN = [
@@ -208,6 +234,17 @@ EMERGENCY_KEYWORDS_EN = [
     "throat swelling", "throat closing", "anaphylaxis",
     # Overdose
     "overdose",
+    # Trauma / injury
+    "fell from", "fall from", "fallen from",
+    "car accident", "motorcycle accident", "traffic accident",
+    "hit by a car", "hit by car",
+    "stabbed", "gunshot", "shot in",
+    "head injury", "head trauma",
+    "broken bone", "bone sticking out",
+    "electric shock", "electrocuted",
+    "near drowning", "almost drowned",
+    "choking",
+    "severe burn", "burned",
 ]
 
 # === Negation-aware detection ===

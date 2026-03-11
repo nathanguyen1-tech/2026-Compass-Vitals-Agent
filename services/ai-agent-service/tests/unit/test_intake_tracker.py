@@ -491,3 +491,90 @@ class TestSuspectedEmergency:
         data = t.to_dict()
         t2 = IntakeTracker(data=data)
         assert t2.suspected_emergency is None
+
+
+class TestRiskLevelTracking:
+    """Tests for continuous risk assessment tracking."""
+
+    def test_default_risk_level(self):
+        t = IntakeTracker()
+        assert t.risk_level == "low"
+        assert t.risk_history == []
+        assert t.risk_reasoning == ""
+
+    def test_update_risk_level(self):
+        t = IntakeTracker()
+        t.update_field("risk_level", "moderate")
+        assert t.risk_level == "moderate"
+        assert t.risk_history == ["moderate"]
+
+    def test_update_risk_reasoning(self):
+        t = IntakeTracker()
+        t.update_field("risk_reasoning", "chest pain reported, need acuity assessment")
+        assert t.risk_reasoning == "chest pain reported, need acuity assessment"
+
+    def test_risk_history_accumulates(self):
+        t = IntakeTracker()
+        t.update_field("risk_level", "low")
+        t.update_field("risk_level", "moderate")
+        t.update_field("risk_level", "high")
+        assert t.risk_history == ["low", "moderate", "high"]
+        assert t.risk_level == "high"
+
+    def test_invalid_risk_level_ignored(self):
+        t = IntakeTracker()
+        t.update_field("risk_level", "invalid_value")
+        assert t.risk_level == "low"  # unchanged
+        assert t.risk_history == []  # not added
+
+    def test_risk_level_case_insensitive(self):
+        t = IntakeTracker()
+        t.update_field("risk_level", "HIGH")
+        assert t.risk_level == "high"
+        t.update_field("risk_level", "Critical")
+        assert t.risk_level == "critical"
+
+    def test_serialization_preserves_risk(self):
+        t = IntakeTracker()
+        t.update_field("risk_level", "high")
+        t.update_field("risk_level", "critical")
+        t.update_field("risk_reasoning", "active chest pain with dyspnea")
+        data = t.to_dict()
+        t2 = IntakeTracker(data=data)
+        assert t2.risk_level == "critical"
+        assert t2.risk_history == ["high", "critical"]
+        assert t2.risk_reasoning == "active chest pain with dyspnea"
+
+    def test_should_auto_escalate_false_with_no_history(self):
+        t = IntakeTracker()
+        assert t.should_auto_escalate() is False
+
+    def test_should_auto_escalate_false_with_one_high(self):
+        t = IntakeTracker()
+        t.update_field("risk_level", "high")
+        assert t.should_auto_escalate() is False
+
+    def test_should_auto_escalate_true_with_two_high(self):
+        t = IntakeTracker()
+        t.update_field("risk_level", "high")
+        t.update_field("risk_level", "high")
+        assert t.should_auto_escalate() is True
+
+    def test_should_auto_escalate_true_with_high_then_critical(self):
+        t = IntakeTracker()
+        t.update_field("risk_level", "high")
+        t.update_field("risk_level", "critical")
+        assert t.should_auto_escalate() is True
+
+    def test_should_auto_escalate_false_after_drop(self):
+        t = IntakeTracker()
+        t.update_field("risk_level", "high")
+        t.update_field("risk_level", "high")
+        t.update_field("risk_level", "moderate")  # dropped
+        assert t.should_auto_escalate() is False
+
+    def test_should_auto_escalate_false_with_low_moderate(self):
+        t = IntakeTracker()
+        t.update_field("risk_level", "low")
+        t.update_field("risk_level", "moderate")
+        assert t.should_auto_escalate() is False

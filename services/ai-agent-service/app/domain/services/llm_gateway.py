@@ -170,8 +170,8 @@ class LLMGateway:
 
     def _select_provider(self, agent_type: str) -> LLMProvider:
         """Hybrid LLM strategy: agent khác nhau dùng model khác nhau."""
-        if agent_type == "intake":
-            return self.screening  # GPT-4o-mini — intake chỉ thu thập data
+        if agent_type in ("intake", "safety_classifier"):
+            return self.screening  # GPT-4o-mini — intake + safety classifier
         # screening, proposer, critic → GPT-4
         return self.primary
 
