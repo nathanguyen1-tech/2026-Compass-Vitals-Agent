@@ -82,6 +82,10 @@ class IntakeTracker:
         self.complaint_category: str | None = None
         self.message_count = 0
 
+        # Demographics
+        self.age: str | None = None
+        self.gender: str | None = None
+
         # Chief complaint
         self.cc: str | None = None
 
@@ -129,12 +133,27 @@ class IntakeTracker:
         self.risk_history: list[str] = []  # History of risk levels per turn
         self.risk_reasoning: str = ""  # Latest clinical reasoning
 
+        # Enforced screening questions
+        self.screening_questions_asked: list[str] = []  # IDs of asked screening Qs
+        self.min_screening_questions: int = 0  # Set by set_screening_requirements()
+
+        # Running symptom accumulator (cross-message combo detection)
+        self.active_symptoms: list[str] = []
+
+        # Clinical scores (Phase 3 — HEART, Wells, qSOFA, PHQ-2)
+        self.clinical_scores: dict[str, dict] = {}
+
         # Apply pre-existing history
         if existing_history:
             self._apply_existing_history(existing_history)
 
     def _apply_existing_history(self, history: dict) -> None:
         """Mark sections as complete if pre-existing data is available."""
+        if history.get("age"):
+            self.age = str(history["age"])
+        if history.get("gender"):
+            self.gender = str(history["gender"])
+
         if history.get("pmh"):
             self.pmh = history["pmh"] if isinstance(history["pmh"], str) else str(history["pmh"])
             self.pmh_complete = True
@@ -169,6 +188,9 @@ class IntakeTracker:
         self.phase = data.get("phase", "greeting")
         self.complaint_category = data.get("complaint_category")
         self.message_count = data.get("message_count", 0)
+
+        self.age = data.get("age")
+        self.gender = data.get("gender")
 
         self.cc = data.get("cc")
 
@@ -206,12 +228,19 @@ class IntakeTracker:
         self.risk_history = data.get("risk_history", [])
         self.risk_reasoning = data.get("risk_reasoning", "")
 
+        self.screening_questions_asked = data.get("screening_questions_asked", [])
+        self.min_screening_questions = data.get("min_screening_questions", 0)
+        self.active_symptoms = data.get("active_symptoms", [])
+        self.clinical_scores = data.get("clinical_scores", {})
+
     def to_dict(self) -> dict:
         """Serialize tracker state for session storage."""
         return {
             "phase": self.phase,
             "complaint_category": self.complaint_category,
             "message_count": self.message_count,
+            "age": self.age,
+            "gender": self.gender,
             "cc": self.cc,
             "hpi": dict(self.hpi),
             "hpi_additional": dict(self.hpi_additional),
@@ -238,6 +267,10 @@ class IntakeTracker:
             "risk_level": self.risk_level,
             "risk_history": list(self.risk_history),
             "risk_reasoning": self.risk_reasoning,
+            "screening_questions_asked": list(self.screening_questions_asked),
+            "min_screening_questions": self.min_screening_questions,
+            "active_symptoms": list(self.active_symptoms),
+            "clinical_scores": dict(self.clinical_scores),
         }
 
     # === Field Updates ===
@@ -251,6 +284,17 @@ class IntakeTracker:
         if field == "phase":
             if value in PHASES:
                 self.phase = value
+            return
+
+        # Demographics
+        if field == "age":
+            if value and value.strip():
+                self.age = value.strip()
+            return
+
+        if field == "gender":
+            if value and value.strip():
+                self.gender = value.strip()
             return
 
         # Chief complaint
@@ -279,8 +323,17 @@ class IntakeTracker:
                 self.red_flags_found.append(flag_id)
             return
 
+        if field == "screening_q_asked":
+            if value not in self.screening_questions_asked:
+                self.screening_questions_asked.append(value)
+            return
+
         if field == "red_flag_screening_done":
-            self.red_flag_screening_done = True
+            # Enforce: only allow if enough screening questions asked
+            if self.can_complete_screening():
+                self.red_flag_screening_done = True
+            # If not enough questions asked, silently ignore — the prompt
+            # will re-instruct the LLM to keep asking
             return
 
         # ROS
@@ -291,24 +344,32 @@ class IntakeTracker:
 
         # PMH
         if field == "pmh":
+            if not value or not value.strip():
+                return  # Ignore empty — section not actually addressed
             self.pmh = value
             self.pmh_complete = True
             return
 
         # Medications
         if field == "medications":
+            if not value or not value.strip():
+                return
             self.medications = value
             self.medications_complete = True
             return
 
         # Allergies
         if field == "allergies":
+            if not value or not value.strip():
+                return
             self.allergies = value
             self.allergies_complete = True
             return
 
         # Social/Family
         if field in ("social_family", "social_history", "family_history"):
+            if not value or not value.strip():
+                return
             self.social_family = value
             self.social_family_complete = True
             return
@@ -363,6 +424,103 @@ class IntakeTracker:
         if len(self.risk_history) < 2:
             return False
         return all(r in ("high", "critical") for r in self.risk_history[-2:])
+
+    def has_emergency_symptom_combo(self) -> bool:
+        """Check if accumulated symptoms form a dangerous combination.
+
+        Catches multi-turn accumulation: fever + breathing difficulty,
+        fever + altered speech, chest pain + SOB, etc.
+        Also checks HPI severity and risk level.
+        """
+        symptoms_lower = {s.lower() for s in self.active_symptoms}
+
+        # Also check HPI fields + cc for symptom signals
+        all_text = " ".join(symptoms_lower)
+        if self.cc:
+            all_text += " " + self.cc.lower()
+        for field_val in self.hpi.values():
+            if field_val:
+                all_text += " " + str(field_val).lower()
+
+        has_fever = any(
+            kw in all_text
+            for kw in ("sốt", "sot", "fever", "nhiệt độ cao", "nhiet do cao", "temperature")
+        )
+        has_breathing = any(
+            kw in all_text
+            for kw in ("thở", "tho", "breath", "dyspnea", "respiratory")
+        )
+        has_severe_pain = any(
+            kw in all_text
+            for kw in ("dữ dội", "du doi", "severe", "10/10", "9/10", "8/10", "rất đau", "rat dau")
+        )
+        has_altered_speech = any(
+            kw in all_text
+            for kw in (
+                "không thể nói", "khong the noi", "nói không", "noi khong",
+                "can't speak", "unable to speak", "speech difficulty",
+            )
+        )
+        has_chest_pain = any(
+            kw in all_text
+            for kw in ("đau ngực", "dau nguc", "chest pain", "tức ngực", "tuc nguc")
+        )
+        has_nausea = any(
+            kw in all_text
+            for kw in ("buồn nôn", "buon non", "nausea", "nôn", "non", "vomit")
+        )
+        has_headache_severe = has_severe_pain and any(
+            kw in all_text
+            for kw in ("đau đầu", "dau dau", "headache", "nhức đầu", "nhuc dau")
+        )
+
+        # Dangerous combinations
+        if has_fever and has_breathing:
+            return True  # Sepsis / pneumonia
+        if has_fever and has_altered_speech:
+            return True  # Meningitis / encephalitis
+        if has_chest_pain and has_breathing:
+            return True  # Cardiac / PE
+        if has_severe_pain and has_breathing:
+            return True  # Cardiac emergency
+        if has_headache_severe and has_fever and has_nausea:
+            return True  # Meningitis triad
+        if has_fever and has_severe_pain and has_nausea:
+            return True  # Sepsis / acute abdomen
+
+        # High risk level + 3+ distinct symptoms
+        if self.risk_level in ("high", "critical") and len(self.active_symptoms) >= 3:
+            return True
+
+        return False
+
+    # === Screening Enforcement ===
+
+    def set_screening_requirements(self, questions: list[dict]) -> None:
+        """Set the screening questions that must be asked before screening can complete.
+
+        Args:
+            questions: List of ScreeningQuestion dicts with 'id' field.
+        """
+        self.min_screening_questions = len(questions)
+
+    def can_complete_screening(self) -> bool:
+        """Check if enough screening questions have been asked to allow completion.
+
+        Returns True if at least min_screening_questions have been asked,
+        or if no screening requirements were set (backward compatibility).
+        """
+        if self.min_screening_questions == 0:
+            return True
+        return len(self.screening_questions_asked) >= self.min_screening_questions
+
+    # === Symptom Accumulator ===
+
+    def add_symptom(self, symptom: str) -> None:
+        """Add a symptom to the running accumulator for cross-message combo detection."""
+        normalized = symptom.strip().lower()
+        if normalized and normalized not in self.active_symptoms:
+            self.active_symptoms.append(normalized)
 
     # === Complaint-Aware OLDCARTS ===
 
@@ -432,16 +590,23 @@ class IntakeTracker:
         """Return 0.0-1.0 score of how complete the intake is.
 
         Weights:
+        - Demographics (age+gender): 5%
         - CC: 10%
         - Red flag screening: 10%
         - HPI: 30% (proportional to OLDCARTS coverage)
         - ROS: 15%
-        - PMH: 10%
-        - Medications: 10%
-        - Allergies: 10%
-        - Social/Family: 5%
+        - PMH: 8%
+        - Medications: 8%
+        - Allergies: 8%
+        - Social/Family: 6%
         """
         score = 0.0
+
+        # Demographics (5%)
+        if self.age:
+            score += 0.025
+        if self.gender:
+            score += 0.025
 
         # CC (10%)
         if self.cc:
@@ -463,29 +628,31 @@ class IntakeTracker:
         elif ros_count > 0:
             score += 0.15 * (ros_count / MIN_ROS_SYSTEMS)
 
-        # PMH (10%)
+        # PMH (8%)
         if self.pmh_complete:
-            score += 0.10
+            score += 0.08
 
-        # Medications (10%)
+        # Medications (8%)
         if self.medications_complete:
-            score += 0.10
+            score += 0.08
 
-        # Allergies (10%)
+        # Allergies (8%)
         if self.allergies_complete:
-            score += 0.10
+            score += 0.08
 
-        # Social/Family (5%)
+        # Social/Family (6%)
         if self.social_family_complete:
-            score += 0.05
+            score += 0.06
 
         return round(score, 2)
 
     def is_minimum_complete(self) -> bool:
         """Check if minimum data for SOAP generation is met.
 
-        Requires: CC, 6/8 OLDCARTS, 2+ ROS systems, PMH, meds, allergies, red flags screened.
+        Requires: age, gender, CC, 6/8 OLDCARTS, 2+ ROS systems, PMH, meds, allergies, red flags screened.
         """
+        if not self.age or not self.gender:
+            return False
         missing = self.get_missing_sections()
         return len(missing) == 0
 
@@ -571,6 +738,11 @@ class IntakeTracker:
         Compatible with the format expected by screening_agent._build_intake_summary().
         """
         data: dict = {}
+
+        if self.age:
+            data["age"] = self.age
+        if self.gender:
+            data["gender"] = self.gender
 
         if self.cc:
             data["chief_complaint"] = self.cc

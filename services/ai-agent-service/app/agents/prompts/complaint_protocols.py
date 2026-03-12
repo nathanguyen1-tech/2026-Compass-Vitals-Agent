@@ -38,6 +38,24 @@ class RedFlag(TypedDict):
     keywords: list[str]  # Keywords that indicate this red flag (lowercase)
 
 
+class ScreeningQuestion(TypedDict):
+    """An explicit safety screening question for enforced red flag screening."""
+
+    id: str  # e.g., "cp_active_now"
+    question_en: str
+    question_vi: str
+    rationale: str  # Why this question matters
+
+
+class SafetyNetting(TypedDict):
+    """Complaint-specific safety netting for end of conversation."""
+
+    worsening_signs_vi: str
+    worsening_signs_en: str
+    follow_up: str  # e.g., "48 hours", "24 hours"
+    escalation: str  # e.g., "115 / 911"
+
+
 class ComplaintProtocol(TypedDict):
     """A complaint-specific clinical intake protocol."""
 
@@ -53,6 +71,8 @@ class ComplaintProtocol(TypedDict):
     cultural_notes: str  # Cultural context for the LLM
     priority_order: str  # "red_flags_first" for chest_pain, "standard" for most
     clinical_reasoning: NotRequired[dict]  # Clinical decision support for LLM
+    screening_questions: NotRequired[list[ScreeningQuestion]]  # Enforced safety questions
+    safety_netting: NotRequired[SafetyNetting]  # End-of-conversation safety net
 
 
 # All 8 OLDCARTS fields — canonical reference list
@@ -129,6 +149,32 @@ PROTOCOLS: dict[str, ComplaintProtocol] = {
                 "Prior stroke + high BP → higher risk of recurrence",
             ],
         },
+        "screening_questions": [
+            {
+                "id": "htn_symptoms_now",
+                "question_en": "Are you having headaches, vision changes, or chest pain RIGHT NOW?",
+                "question_vi": "Ban co dang bi dau dau, thay doi thi luc, hoac dau nguc NGAY LUC NAY khong?",
+                "rationale": "Screen for hypertensive emergency with end-organ damage",
+            },
+            {
+                "id": "htn_bp_reading",
+                "question_en": "Do you know your recent blood pressure reading? Was it above 180/120?",
+                "question_vi": "Ban co biet chi so huyet ap gan day khong? Co tren 180/120 khong?",
+                "rationale": "Quantify severity — BP >180/120 with symptoms = emergency",
+            },
+            {
+                "id": "htn_confusion",
+                "question_en": "Are you feeling confused, dizzy, or having trouble speaking?",
+                "question_vi": "Ban co cam thay lon xon, chong mat, hoac kho noi khong?",
+                "rationale": "Screen for hypertensive encephalopathy",
+            },
+        ],
+        "safety_netting": {
+            "worsening_signs_vi": "Neu dau dau du doi, mat mo, dau nguc, kho tho, hoac lon xon → goi 115 ngay",
+            "worsening_signs_en": "If severe headache, vision changes, chest pain, SOB, or confusion → call 911",
+            "follow_up": "48 hours",
+            "escalation": "115 / 911",
+        },
     },
 
     # --- Tier 1: #2 Diabetes ---
@@ -200,6 +246,32 @@ PROTOCOLS: dict[str, ComplaintProtocol] = {
                 "Prior DKA episodes → higher risk of recurrence",
                 "Elderly + Type 2 DM → HHS risk",
             ],
+        },
+        "screening_questions": [
+            {
+                "id": "dm_nausea_confusion",
+                "question_en": "Are you having nausea, vomiting, or feeling confused right now?",
+                "question_vi": "Ban co dang bi buon non, oi mua, hoac cam thay lon xon khong?",
+                "rationale": "Screen for DKA/HHS — nausea + confusion = emergency",
+            },
+            {
+                "id": "dm_breathing",
+                "question_en": "Are you breathing faster than usual or having trouble catching your breath?",
+                "question_vi": "Ban co dang tho nhanh hon binh thuong hoac kho tho khong?",
+                "rationale": "Kussmaul breathing is hallmark of DKA",
+            },
+            {
+                "id": "dm_glucose_reading",
+                "question_en": "Do you know your current blood sugar? When did you last eat?",
+                "question_vi": "Ban co biet chi so duong huyet hien tai khong? Lan cuoi an la khi nao?",
+                "rationale": "Quantify hypo/hyperglycemia risk",
+            },
+        ],
+        "safety_netting": {
+            "worsening_signs_vi": "Neu buon non/oi tang, lon xon, tho nhanh, hoac mat y thuc → goi 115 ngay",
+            "worsening_signs_en": "If worsening nausea/vomiting, confusion, rapid breathing, or loss of consciousness → call 911",
+            "follow_up": "24 hours",
+            "escalation": "115 / 911",
         },
     },
 
@@ -288,6 +360,32 @@ PROTOCOLS: dict[str, ComplaintProtocol] = {
                 "Vietnamese immigrant + chronic cough → TB screening priority",
             ],
         },
+        "screening_questions": [
+            {
+                "id": "uri_breathing",
+                "question_en": "Are you having difficulty breathing or shortness of breath?",
+                "question_vi": "Ban co dang kho tho hoac thieu hoi khong?",
+                "rationale": "Screen for respiratory distress / pneumonia",
+            },
+            {
+                "id": "uri_fever_neck",
+                "question_en": "Do you have a fever? Any stiff neck or the worst headache of your life?",
+                "question_vi": "Ban co sot khong? Co cung co hoac dau dau du doi nhat chua tung co khong?",
+                "rationale": "Screen for meningitis",
+            },
+            {
+                "id": "uri_blood_cough",
+                "question_en": "Have you coughed up any blood?",
+                "question_vi": "Ban co ho ra mau khong?",
+                "rationale": "Hemoptysis is always high risk",
+            },
+        ],
+        "safety_netting": {
+            "worsening_signs_vi": "Neu kho tho tang, ho ra mau, sot cao khong ha, hoac cung co → goi 115 ngay",
+            "worsening_signs_en": "If worsening breathing difficulty, coughing blood, persistent high fever, or stiff neck → call 911",
+            "follow_up": "72 hours",
+            "escalation": "115 / 911",
+        },
     },
 
     # --- Tier 1: #4 Headache ---
@@ -374,6 +472,32 @@ PROTOCOLS: dict[str, ComplaintProtocol] = {
                 "Immunosuppressed + headache + fever → lower threshold for meningitis concern",
             ],
         },
+        "screening_questions": [
+            {
+                "id": "ha_thunderclap",
+                "question_en": "Is this the WORST headache of your life? Did it come on suddenly, like a thunderclap?",
+                "question_vi": "Day co phai la con dau dau DU DOI NHAT trong doi ban khong? No co den dot ngot nhu set danh khong?",
+                "rationale": "Screen for SAH — thunderclap headache is neurosurgical emergency",
+            },
+            {
+                "id": "ha_fever_neck",
+                "question_en": "Do you have a fever with a stiff neck?",
+                "question_vi": "Ban co bi sot kem cung co khong?",
+                "rationale": "Screen for meningitis",
+            },
+            {
+                "id": "ha_neuro_deficit",
+                "question_en": "Any numbness, weakness, vision changes, or difficulty speaking?",
+                "question_vi": "Ban co bi te, yeu, thay doi thi luc, hoac kho noi khong?",
+                "rationale": "Screen for stroke / intracranial mass",
+            },
+        ],
+        "safety_netting": {
+            "worsening_signs_vi": "Neu dau dau dot ngot du doi, cung co, te/yeu nua nguoi, mat thi luc, kho noi → goi 115 ngay",
+            "worsening_signs_en": "If sudden severe headache, stiff neck, one-sided numbness/weakness, vision loss, speech difficulty → call 911",
+            "follow_up": "24 hours",
+            "escalation": "115 / 911",
+        },
     },
 
     # --- Tier 1: #5 Back Pain / Joint Pain ---
@@ -447,6 +571,32 @@ PROTOCOLS: dict[str, ComplaintProtocol] = {
                 "Osteoporosis + back pain after minor fall → compression fracture risk",
                 "IV drug use + back pain + fever → epidural abscess concern",
             ],
+        },
+        "screening_questions": [
+            {
+                "id": "bjp_bowel_bladder",
+                "question_en": "Have you noticed any changes in bowel or bladder control?",
+                "question_vi": "Ban co thay doi ve kiem soat tieu tien hoac dai tien khong?",
+                "rationale": "Screen for cauda equina syndrome — surgical emergency",
+            },
+            {
+                "id": "bjp_saddle_numbness",
+                "question_en": "Any numbness in the area between your legs (the area you'd sit on a saddle)?",
+                "question_vi": "Ban co bi te o vung giua hai chan (vung ngoi) khong?",
+                "rationale": "Saddle anesthesia = cauda equina until proven otherwise",
+            },
+            {
+                "id": "bjp_leg_weakness",
+                "question_en": "Any progressive weakness in your legs, or difficulty walking?",
+                "question_vi": "Ban co bi yeu dan o chan hoac kho di lai khong?",
+                "rationale": "Progressive bilateral weakness = cord compression emergency",
+            },
+        ],
+        "safety_netting": {
+            "worsening_signs_vi": "Neu mat kiem soat tieu tien/dai tien, te vung ngoi, yeu hai chan → den cap cuu NGAY",
+            "worsening_signs_en": "If loss of bowel/bladder control, saddle numbness, or bilateral leg weakness → go to ER IMMEDIATELY",
+            "follow_up": "48 hours",
+            "escalation": "115 / 911",
         },
     },
 
@@ -529,6 +679,32 @@ PROTOCOLS: dict[str, ComplaintProtocol] = {
                 "Hepatitis B carrier (common in Vietnamese) → liver cancer screening",
                 "Elderly + abdominal pain → lower threshold (atypical presentations)",
             ],
+        },
+        "screening_questions": [
+            {
+                "id": "gi_blood",
+                "question_en": "Any blood in your stool, or have you vomited blood?",
+                "question_vi": "Ban co di cau ra mau, hoac oi ra mau khong?",
+                "rationale": "GI bleeding is always high risk — hematemesis/hematochezia",
+            },
+            {
+                "id": "gi_severity_location",
+                "question_en": "Is the pain severe? Is it in the lower right side of your belly?",
+                "question_vi": "Dau co du doi khong? Co o phia ben phai bung duoi khong?",
+                "rationale": "Screen for appendicitis — RLQ pain + severity",
+            },
+            {
+                "id": "gi_fever_rigid",
+                "question_en": "Do you have a fever? Is your belly very tender or hard to touch?",
+                "question_vi": "Ban co sot khong? Bung co rat dau khi cham vao hoac cung khong?",
+                "rationale": "Fever + rigid abdomen = peritonitis → surgical emergency",
+            },
+        ],
+        "safety_netting": {
+            "worsening_signs_vi": "Neu oi ra mau, di cau ra mau, dau bung tang du doi, bung cung, sot cao → goi 115 ngay",
+            "worsening_signs_en": "If vomiting blood, bloody stool, worsening severe pain, rigid abdomen, high fever → call 911",
+            "follow_up": "24 hours",
+            "escalation": "115 / 911",
         },
     },
 
@@ -620,6 +796,26 @@ PROTOCOLS: dict[str, ComplaintProtocol] = {
                 "Chronic pain + depression → higher risk",
             ],
         },
+        "screening_questions": [
+            {
+                "id": "mh_mood_check",
+                "question_en": "How has your mood been recently?",
+                "question_vi": "Gan day tam trang ban the nao?",
+                "rationale": "Low-threat mood check — PHQ-2 gateway step 1",
+            },
+            {
+                "id": "mh_phq2",
+                "question_en": "Over the past 2 weeks, have you felt down, depressed, or lost interest in things you used to enjoy?",
+                "question_vi": "Trong 2 tuan qua, ban co cam thay buon, chan nan, hoac mat hung thu voi nhung dieu truoc day ban thich khong?",
+                "rationale": "PHQ-2 screening — gateway to safety questions",
+            },
+        ],
+        "safety_netting": {
+            "worsening_signs_vi": "Neu ban co suy nghi tu hai ban than hoac khong muon song → goi 988 (Suicide Lifeline) hoac 115 ngay",
+            "worsening_signs_en": "If you have thoughts of harming yourself or not wanting to live → call 988 (Suicide Lifeline) or 911 immediately",
+            "follow_up": "24 hours",
+            "escalation": "988 / 115 / 911",
+        },
     },
 
     # --- Tier 1: #8 Skin Rash ---
@@ -691,6 +887,32 @@ PROTOCOLS: dict[str, ComplaintProtocol] = {
                 "Immunosuppressed + rash + fever → lower threshold for concern",
             ],
         },
+        "screening_questions": [
+            {
+                "id": "skin_spreading_fever",
+                "question_en": "Is the rash spreading rapidly? Do you have a fever?",
+                "question_vi": "Phat ban co lan nhanh khong? Ban co sot khong?",
+                "rationale": "Rapidly spreading rash + fever = SJS/meningococcemia concern",
+            },
+            {
+                "id": "skin_mucosal",
+                "question_en": "Any sores in your mouth, red eyes, or sores in the genital area?",
+                "question_vi": "Ban co bi lot mieng, do mat, hoac lot o vung kin khong?",
+                "rationale": "Mucosal involvement = SJS/TEN → emergency",
+            },
+            {
+                "id": "skin_breathing",
+                "question_en": "Any throat swelling or difficulty breathing?",
+                "question_vi": "Ban co bi sung hong hoac kho tho khong?",
+                "rationale": "Anaphylaxis screening — throat swelling + SOB = critical",
+            },
+        ],
+        "safety_netting": {
+            "worsening_signs_vi": "Neu phat ban lan nhanh, sot tang, lot mieng/mat, kho tho, hoac da bong troc → goi 115 ngay",
+            "worsening_signs_en": "If rash spreads rapidly, worsening fever, mouth/eye sores, breathing difficulty, or skin peeling → call 911",
+            "follow_up": "24 hours",
+            "escalation": "115 / 911",
+        },
     },
 
     # --- Tier 1: #9 Urinary ---
@@ -761,6 +983,32 @@ PROTOCOLS: dict[str, ComplaintProtocol] = {
                 "Diabetic + UTI → higher risk of complicated infection",
                 "Recurrent UTIs → may still be serious if systemic symptoms present",
             ],
+        },
+        "screening_questions": [
+            {
+                "id": "uri_fever_flank",
+                "question_en": "Do you have a fever or chills? Any pain in your back on either side?",
+                "question_vi": "Ban co sot hoac lanh run khong? Co dau o lung hai ben hong khong?",
+                "rationale": "Screen for pyelonephritis — fever + flank pain = kidney infection",
+            },
+            {
+                "id": "uri_retention",
+                "question_en": "Can you urinate at all? Or is it completely blocked?",
+                "question_vi": "Ban co tieu duoc khong? Hay hoan toan khong tieu duoc?",
+                "rationale": "Complete urinary retention = acute emergency",
+            },
+            {
+                "id": "uri_blood",
+                "question_en": "Do you see blood in your urine?",
+                "question_vi": "Ban co thay mau trong nuoc tieu khong?",
+                "rationale": "Hematuria may indicate stones, infection, or malignancy",
+            },
+        ],
+        "safety_netting": {
+            "worsening_signs_vi": "Neu sot tang, dau hong lung du doi, khong tieu duoc, hoac lon xon → den cap cuu ngay",
+            "worsening_signs_en": "If worsening fever, severe flank pain, inability to urinate, or confusion → go to ER immediately",
+            "follow_up": "48 hours",
+            "escalation": "115 / 911",
         },
     },
 
@@ -836,6 +1084,32 @@ PROTOCOLS: dict[str, ComplaintProtocol] = {
                 "Heart failure + worsening fatigue → decompensation concern",
                 "Diabetes + fatigue + confusion → hypoglycemia/DKA concern",
             ],
+        },
+        "screening_questions": [
+            {
+                "id": "fatigue_sudden_onesided",
+                "question_en": "Did the weakness come on SUDDENLY, especially on one side of your body?",
+                "question_vi": "Su yeu co den DOT NGOT khong, dac biet la o mot ben nguoi?",
+                "rationale": "Sudden one-sided weakness = stroke until proven otherwise",
+            },
+            {
+                "id": "fatigue_neuro",
+                "question_en": "Any confusion, vision changes, difficulty speaking, or numbness?",
+                "question_vi": "Ban co bi lon xon, thay doi thi luc, kho noi, hoac te khong?",
+                "rationale": "Neurological deficits with fatigue = stroke/mass",
+            },
+            {
+                "id": "fatigue_cardiac",
+                "question_en": "Any chest pain, racing heart, or feeling faint?",
+                "question_vi": "Ban co dau nguc, tim dap nhanh, hoac cam giac sap ngat khong?",
+                "rationale": "Cardiac causes of fatigue — anemia, heart failure, PE",
+            },
+        ],
+        "safety_netting": {
+            "worsening_signs_vi": "Neu yeu dot ngot mot ben, lon xon, kho noi, dau nguc, hoac ngat → goi 115 ngay",
+            "worsening_signs_en": "If sudden one-sided weakness, confusion, speech difficulty, chest pain, or fainting → call 911",
+            "follow_up": "48 hours",
+            "escalation": "115 / 911",
         },
     },
 
@@ -953,6 +1227,32 @@ PROTOCOLS: dict[str, ComplaintProtocol] = {
                 "Family history of sudden cardiac death → lower threshold for concern",
             ],
         },
+        "screening_questions": [
+            {
+                "id": "cp_active_now",
+                "question_en": "Is the chest pain happening RIGHT NOW?",
+                "question_vi": "Ban co dang bi dau nguc NGAY LUC NAY khong?",
+                "rationale": "Active ACS needs immediate action — timing is critical",
+            },
+            {
+                "id": "cp_associated",
+                "question_en": "Are you also having shortness of breath, sweating, nausea, or pain spreading to your jaw, arm, or back?",
+                "question_vi": "Ban co bi kho tho, do mo hoi, buon non, hoac dau lan ra ham/tay/lung khong?",
+                "rationale": "Associated symptoms with chest pain = ACS until proven otherwise",
+            },
+            {
+                "id": "cp_cardiac_history",
+                "question_en": "Do you have a history of heart disease, stents, or bypass surgery?",
+                "question_vi": "Ban co tien su benh tim, dat stent, hoac phau thuat bypass khong?",
+                "rationale": "Prior CAD dramatically increases probability of ACS",
+            },
+        ],
+        "safety_netting": {
+            "worsening_signs_vi": "Neu dau nguc tang len, kho tho, dau lan ra tay/ham/lung, do mo hoi, hoac ngat → goi 115 ngay",
+            "worsening_signs_en": "If chest pain worsens, SOB develops, pain radiates to arm/jaw/back, sweating, or fainting → call 911",
+            "follow_up": "24 hours",
+            "escalation": "115 / 911",
+        },
     },
 }
 
@@ -1002,6 +1302,32 @@ FALLBACK_PROTOCOL: ComplaintProtocol = {
             "Elderly + any acute change → lower threshold for concern",
             "Multiple comorbidities + acute complaint → higher risk",
         ],
+    },
+    "screening_questions": [
+        {
+            "id": "gen_breathing",
+            "question_en": "Are you having any difficulty breathing?",
+            "question_vi": "Ban co dang kho tho khong?",
+            "rationale": "Breathing difficulty is always high risk regardless of complaint",
+        },
+        {
+            "id": "gen_bleeding",
+            "question_en": "Any uncontrolled bleeding or significant injury?",
+            "question_vi": "Ban co dang chay mau khong kiem soat hoac chan thuong nang khong?",
+            "rationale": "Active bleeding / trauma needs immediate assessment",
+        },
+        {
+            "id": "gen_confusion",
+            "question_en": "Are you feeling confused or having trouble thinking clearly?",
+            "question_vi": "Ban co cam thay lon xon hoac kho suy nghi ro rang khong?",
+            "rationale": "Altered mental status = many dangerous causes",
+        },
+    ],
+    "safety_netting": {
+        "worsening_signs_vi": "Neu kho tho, dau nguc, chay mau khong ngung, lon xon, hoac ngat → goi 115 ngay",
+        "worsening_signs_en": "If breathing difficulty, chest pain, uncontrolled bleeding, confusion, or fainting → call 911",
+        "follow_up": "48 hours",
+        "escalation": "115 / 911",
     },
 }
 

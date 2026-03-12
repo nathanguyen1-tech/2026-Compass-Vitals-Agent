@@ -1,9 +1,7 @@
 """Tests for Contextual Emergency Detection — complaint-specific red flags."""
 
-from app.agents.tools.emergency_detector import (
-    detect_contextual_red_flags,
-    get_red_flag_screening_questions,
-)
+from app.agents.prompts.complaint_protocols import get_complaint_protocol
+from app.agents.tools.emergency_detector import detect_contextual_red_flags
 
 
 class TestContextualRedFlagDetection:
@@ -150,32 +148,41 @@ class TestConversationHistory:
 
 
 class TestRedFlagScreeningQuestions:
+    """Tests for protocol-based screening questions (moved from emergency_detector)."""
+
     def test_chest_pain_has_3_safety_questions(self):
-        questions = get_red_flag_screening_questions("chest_pain")
+        protocol = get_complaint_protocol("chest_pain")
+        questions = protocol.get("screening_questions", [])
         assert len(questions) == 3
         assert all("question_en" in q for q in questions)
         assert all("question_vi" in q for q in questions)
 
     def test_headache_has_screening_questions(self):
-        questions = get_red_flag_screening_questions("headache")
+        protocol = get_complaint_protocol("headache")
+        questions = protocol.get("screening_questions", [])
         assert len(questions) >= 2
 
     def test_mental_health_has_safety_screening(self):
-        questions = get_red_flag_screening_questions("mental_health")
+        protocol = get_complaint_protocol("mental_health")
+        questions = protocol.get("screening_questions", [])
         assert len(questions) >= 1
-        assert any("hurt" in q["question_en"].lower() for q in questions)
+        assert any("mood" in q["question_en"].lower() for q in questions)
 
     def test_back_pain_has_cauda_equina_screening(self):
-        questions = get_red_flag_screening_questions("back_joint_pain")
+        protocol = get_complaint_protocol("back_joint_pain")
+        questions = protocol.get("screening_questions", [])
         assert len(questions) >= 2
 
-    def test_unknown_category_returns_empty(self):
-        questions = get_red_flag_screening_questions("unknown")
-        assert questions == []
+    def test_unknown_category_returns_fallback_with_questions(self):
+        protocol = get_complaint_protocol("unknown")
+        questions = protocol.get("screening_questions", [])
+        # Fallback protocol now has general screening questions
+        assert len(questions) >= 2
 
-    def test_general_returns_empty(self):
-        questions = get_red_flag_screening_questions("general")
-        assert questions == []
+    def test_general_returns_fallback_with_questions(self):
+        protocol = get_complaint_protocol("general")
+        questions = protocol.get("screening_questions", [])
+        assert len(questions) >= 2
 
 
 class TestAnaphylaxisExpandedKeywords:

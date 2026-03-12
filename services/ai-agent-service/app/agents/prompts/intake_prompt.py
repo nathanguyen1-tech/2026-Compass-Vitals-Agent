@@ -25,10 +25,57 @@ RULES:
 - Ask ONE question at a time. Never bundle multiple questions.
 - Be empathetic, warm, and patient. Use simple language.
 - Offer choices when appropriate: "Is the pain: (A) sharp/stabbing, (B) dull/aching, (C) burning, (D) pressure-like?"
-- Give brief acknowledgment before each new question: "I see." / "Thank you." / "Got it."
 - NEVER generate diagnoses or recommend treatment. You ONLY gather information.
 - If the patient wants to stop early, respect that. Mark the intake as incomplete.
-- Keep responses concise — no long paragraphs."""
+- Keep responses concise — no long paragraphs.
+
+EXPERT CLINICAL BEHAVIOR:
+- WORST-FIRST THINKING: Always consider the most dangerous possibility first.
+  Chest pain → "Could this be MI?" BEFORE considering GERD.
+  Headache → "Could this be SAH?" BEFORE considering migraine.
+  Falls → "Could there be spinal injury?" BEFORE considering bruising.
+
+- FUNNEL APPROACH: Start with open questions, narrow to specific.
+  Open: "Hom nay co chuyen gi khien ban quyet dinh di kham?"
+  → Extract from narrative → Only ask closed questions for GAPS.
+  → NEVER re-ask what the patient already told you.
+
+- REFLECTIVE ACKNOWLEDGMENT: After each key symptom, echo back the specific clinical fact.
+  GOOD: "Vay la con dau bat dau 3 ngay truoc, lan ra tay trai. Thong tin nay rat huu ich."
+  BAD: "Got it." / "I see." / "Thank you."
+  Always reflect the SPECIFIC clinical detail the patient just shared.
+
+- HIDDEN CONCERN PROBE: After chief complaint collection, ask:
+  "Ban lo lang nhat day co the la benh gi?" / "What concerns you most about this?"
+  Before summary, ask:
+  "Truoc khi ket thuc, co dieu gi ban muon noi them khong?" / "Anything else before we wrap up?"
+
+- CONTRADICTION DETECTION: If patient says "pain 3/10" but also
+  "cannot sleep because of pain" → flag inconsistency, treat as more severe.
+  If numeric score contradicts functional impact → trust functional assessment.
+
+- DIAGNOSTIC CHECKPOINT (internal, every 2-3 exchanges):
+  "Top 3 dangerous possibilities? What have I ruled out? What remains?"
+  Use this to guide your next question — always pursue the most dangerous remaining possibility.
+
+VIETNAMESE PATIENT PAIN ASSESSMENT:
+- Vietnamese patients consistently underreport pain on numeric scales (cultural stoicism).
+- ALWAYS supplement 1-10 scale with FUNCTIONAL questions:
+  "Con dau co khien ban khong ngu duoc khong?" / "Does it keep you from sleeping?"
+  "Ban co di lai binh thuong duoc khong?" / "Can you walk normally?"
+  "Ban co an uong duoc khong?" / "Can you eat and drink normally?"
+- If functional impact contradicts numeric score → trust functional assessment.
+- Ask about traditional medicine: "Ban co dang dung thuoc bac, thuoc nam, nhan sam, nghe, hay thuc pham chuc nang nao khong?"
+  / "Are you using any traditional medicine, herbs, ginseng, turmeric, or supplements?"
+
+MANDATORY INFORMATION COLLECTION:
+- You MUST collect: age, gender, PMH, medications, allergies, social/family history.
+- Be SMART: if the patient already volunteered information in conversation,
+  extract it from what they said — do NOT re-ask what you already know.
+- Only ask about sections where data is MISSING.
+- Acceptable negative answers: "none", "no", "khong co" — record them and move on.
+- NEVER skip to summary if age, gender, or any history section is still unknown.
+"""
 
 _EMERGENCY_DETECTION_INSTRUCTIONS = """\
 EMERGENCY DETECTION & CONTINUOUS RISK ASSESSMENT (CRITICAL — every message):
@@ -146,51 +193,45 @@ Factor in known history when assessing risk:
 === WHEN YOU SUSPECT AN EMERGENCY ===
 1. Do NOT immediately declare an emergency.
 2. Emit [INTAKE:emergency_suspected=BRIEF_REASON] to flag it.
-3. Ask ONE calm, targeted confirmation question in the patient's language.
-4. Wait for the patient's response. Based on their answer:
-   - If ACTIVE, SEVERE, or ACUTE → ask ONE MORE confirmation question,
-     then emit [INTAKE:emergency_confirmed=REASON]
-   - If MILD, PAST, or CHRONIC → emit [INTAKE:emergency_cleared=reason]
-   - If AMBIGUOUS → ask ONE more question, then MUST decide.
+3. Ask ONE calm, targeted confirmation question to gather more info.
+   Example: "Ban co the mo ta them ve con dau nguc khong? Dang xay ra luc nay khong?"
+   / "Can you tell me more about the chest pain? Is it happening right now?"
+4. Wait for the patient's response and assess.
 
-AFTER 2 CONFIRMATION QUESTIONS: You MUST emit either
-[INTAKE:emergency_confirmed=REASON] or [INTAKE:emergency_cleared=reason].
-Do not keep asking — decide based on available information.
+AFTER 2 CONFIRMATION QUESTIONS with the patient:
+- If the emergency is CONFIRMED: You MUST emit [INTAKE:emergency_confirmed=REASON]
+- If the emergency is CLEARED: You MUST emit [INTAKE:emergency_cleared=REASON]
+- Do NOT leave the investigation open-ended. You MUST decide after 2 questions.
 
-NEVER emit emergency_confirmed for:
+When in doubt after 2 questions, err on the side of caution → emit emergency_confirmed.
+
+NEVER emit emergency_suspected for:
 - Mild/routine complaints with no emergency features
 - Historical/past emergencies the patient recovered from
 - Negated symptoms: "I do NOT have chest pain" should NOT trigger
-- Symptoms explicitly described as mild/chronic/stable"""
+- Symptoms explicitly described as mild/chronic/stable
 
+=== ABCDE TELEMEDICINE PROXY (run mentally on FIRST substantive message) ===
+- Airway: Can patient communicate clearly? (garbled text, unable to type = concern)
+- Breathing: Any mention of difficulty breathing, gasping, can't catch breath?
+- Circulation: Any mention of dizziness, lightheadedness, fainting, blue lips, cold extremities?
+- Disability: Is patient coherent and oriented? (confused messages, nonsensical text = concern)
+- Exposure: Any mention of high fever, visible injury, spreading rash, burns?
+If ANY concern from ABCDE → immediately set risk_level=high and escalate to safety screening.
 
-def _emergency_confirmation_section(suspected_emergency: dict) -> str:
-    """Build prompt section reminding LLM about active suspected emergency."""
-    reason = suspected_emergency.get("reason", "unknown")
-    asked = suspected_emergency.get("confirmation_questions_asked", 0)
-    remaining = max(0, 2 - asked)
+=== STEPPED MENTAL HEALTH SCREENING ===
+When mental health concerns are detected (mood complaints, anxiety, insomnia, vague somatic symptoms):
+1. Mood check (low threat): "Gan day tam trang ban the nao?" / "How has your mood been recently?"
+2. PHQ-2 gateway: "Trong 2 tuan qua, ban co cam thay buon, chan nan, hoac mat hung thu khong?"
+   / "Over the past 2 weeks, have you felt down, depressed, or lost interest in things?"
+3. Safety screen (ONLY if PHQ-2 positive): "Doi khi khi nguoi ta cam thay nhu vay, ho co nhung suy nghi khong muon song nua. Ban co tung co suy nghi nhu vay khong?"
+   / "Sometimes when people feel this way, they have thoughts of not wanting to be alive. Have you had thoughts like that?"
+4. C-SSRS escalation (ONLY if active ideation): "Ban co nghi den cach nao cu the khong?"
+   / "Have you thought about a specific way?"
+CRITICAL: NEVER jump to step 3 or 4 without going through earlier steps.
+CRITICAL: Always normalize before asking: "Day la nhung cau hoi thuong quy chung toi hoi tat ca moi nguoi."
+"""
 
-    lines = [
-        "*** ACTIVE EMERGENCY INVESTIGATION ***",
-        f"You previously suspected an emergency: {reason}",
-        f"Confirmation questions asked so far: {asked}",
-    ]
-
-    if remaining > 0:
-        lines.append(
-            f"You have {remaining} more question(s) to ask before you MUST decide."
-        )
-        lines.append(
-            "Ask a calm, targeted follow-up question to determine severity and acuity."
-        )
-    else:
-        lines.append(
-            "You have asked enough questions. You MUST now emit either "
-            "[INTAKE:emergency_confirmed=REASON] or [INTAKE:emergency_cleared=reason]."
-        )
-
-    lines.append("*** END EMERGENCY INVESTIGATION ***")
-    return "\n".join(lines)
 
 _MARKER_INSTRUCTIONS = """\
 STRUCTURED DATA EXTRACTION:
@@ -198,6 +239,7 @@ After each patient answer, include hidden markers to track collected data.
 Format: [INTAKE:field=value]
 
 Available fields:
+- age (patient's age), gender (male/female/other)
 - cc (chief complaint), onset, location, duration, character, aggravating, alleviating, timing, severity
 - medications, allergies, pmh (past medical history), social_family
 - ros_SYSTEM (e.g., ros_cardiovascular=negative, ros_neurological=headaches)
@@ -209,6 +251,8 @@ Available fields:
 - risk_reasoning=brief clinical reasoning for current risk level (MANDATORY in every response)
 
 Examples:
+- Patient says "toi 45 tuoi" → include [INTAKE:age=45]
+- Patient says "toi la nam gioi" → include [INTAKE:gender=male]
 - Patient says "It started 3 days ago" → include [INTAKE:onset=3 days ago]
 - Patient says "I take metformin" → include [INTAKE:medications=metformin]
 - Patient says "No, I don't have chest pain right now" → include [INTAKE:red_flag_check=acs_active:negative]
@@ -235,13 +279,18 @@ def _greeting_section(language: str = "vi") -> str:
 CURRENT PHASE: GREETING
 - Welcome the patient warmly in Vietnamese.
 - Tell them: "Cuoc tro chuyen se mat toi da 15 phut."
-- Then ask their chief complaint: "Hom nay ban can kham gi a?"
+- Ask for basic info and chief complaint together:
+  "Xin cho biet tuoi va gioi tinh cua ban, va hom nay ban can kham gi a?"
+  (This is natural — a real nurse asks age, gender, and chief concern in one breath.)
+- If the patient provides age/gender, extract with [INTAKE:age=...] [INTAKE:gender=...]
 - Include [INTAKE:phase=cc] in your response."""
     return """\
 CURRENT PHASE: GREETING
 - Welcome the patient warmly.
 - Tell them: "This conversation will take up to 15 minutes."
-- Then ask their chief complaint: "What brings you in today?"
+- Ask for basic info and chief complaint together:
+  "Could you tell me your age and gender, and what brings you in today?"
+- If the patient provides age/gender, extract with [INTAKE:age=...] [INTAKE:gender=...]
 - Include [INTAKE:phase=cc] in your response."""
 
 
@@ -262,23 +311,68 @@ def _red_flag_screening_section(
         "CURRENT PHASE: RED FLAG SCREENING",
         "- Ask targeted safety questions BEFORE detailed history.",
         "- These are critical — do NOT skip.",
+        "",
+        "NORMALIZATION (say this BEFORE asking the first safety question):",
+        '"Day la nhung cau hoi thuong quy ma chung toi hoi tat ca moi nguoi de dam bao an toan."',
+        '/ "These are routine questions we ask everyone to ensure your safety."',
     ]
 
     if protocol and protocol.get("priority_order") == "red_flags_first":
         lines.append(
-            "- IMPORTANT: This complaint has RED_FLAGS_FIRST priority. "
+            "\n- IMPORTANT: This complaint has RED_FLAGS_FIRST priority. "
             "Ask ALL safety questions before ANY other HPI questions."
         )
 
-    if protocol:
-        for rf in protocol.get("red_flags", []):
-            lines.append(f"- Screen for: {rf['pattern_en']}")
-            lines.append(f"  If positive → Action: {rf['action']}")
-            if rf["action"] == "911":
-                lines.append(f"  Emergency message EN: {rf['message_en']}")
-                lines.append(f"  Emergency message VI: {rf['message_vi']}")
+    # === Enforced screening questions (explicit numbered bilingual) ===
+    screening_qs = protocol.get("screening_questions", []) if protocol else []
+    if screening_qs:
+        asked_ids = set(tracker.screening_questions_asked) if tracker else set()
+        total = len(screening_qs)
+        done_count = len(asked_ids)
 
-        # Include clinical reasoning if available
+        lines.append(f"\nSAFETY QUESTIONS ({done_count}/{total} completed):")
+
+        for i, sq in enumerate(screening_qs, 1):
+            status = "DONE" if sq["id"] in asked_ids else "PENDING"
+            lines.append(f"  {i}. [{status}] {sq['question_vi']}")
+            lines.append(f"     ({sq['question_en']})")
+            if status == "PENDING":
+                lines.append(
+                    f"     [After asking, emit: [INTAKE:screening_q_asked={sq['id']}]]"
+                )
+
+        # Find next unanswered question
+        next_q = None
+        for sq in screening_qs:
+            if sq["id"] not in asked_ids:
+                next_q = sq
+                break
+
+        if next_q:
+            lines.append(
+                f"\nASK THE NEXT UNANSWERED QUESTION: \"{next_q['question_vi']}\" "
+                f"/ \"{next_q['question_en']}\""
+            )
+            lines.append(
+                f"After the patient answers, emit [INTAKE:screening_q_asked={next_q['id']}]"
+            )
+        else:
+            lines.append(
+                "\nAll safety questions have been asked. "
+                "Emit [INTAKE:red_flag_screening_done=true] and [INTAKE:phase=hpi]"
+            )
+    else:
+        # Legacy fallback: use red_flags for screening guidance
+        if protocol:
+            for rf in protocol.get("red_flags", []):
+                lines.append(f"- Screen for: {rf['pattern_en']}")
+                lines.append(f"  If positive → Action: {rf['action']}")
+                if rf["action"] == "911":
+                    lines.append(f"  Emergency message EN: {rf['message_en']}")
+                    lines.append(f"  Emergency message VI: {rf['message_vi']}")
+
+    # Include clinical reasoning if available
+    if protocol:
         clinical = protocol.get("clinical_reasoning")
         if clinical:
             lines.append("\nCLINICAL INVESTIGATION GUIDE:")
@@ -303,10 +397,11 @@ def _red_flag_screening_section(
                 "Do NOT ask about these topics during screening or at any point. ***"
             )
 
-    lines.append(
-        "- After screening, include [INTAKE:red_flag_screening_done=true] "
-        "and move to HPI phase [INTAKE:phase=hpi]"
-    )
+    if not screening_qs:
+        lines.append(
+            "\n- After screening, include [INTAKE:red_flag_screening_done=true] "
+            "and move to HPI phase [INTAKE:phase=hpi]"
+        )
 
     return "\n".join(lines)
 
@@ -447,6 +542,19 @@ def _history_sections(
     """
     lines = []
 
+    # Demographics check — remind LLM if age/gender still missing
+    if tracker:
+        demographics_missing = []
+        if not tracker.age:
+            demographics_missing.append("age (tuoi)")
+        if not tracker.gender:
+            demographics_missing.append("gender (gioi tinh)")
+        if demographics_missing:
+            lines.append(
+                f"DEMOGRAPHICS MISSING: You must ask about {', '.join(demographics_missing)}. "
+                "Weave this into your next question naturally."
+            )
+
     sections_needed = []
 
     if tracker:
@@ -489,7 +597,9 @@ def _history_sections(
         sections_needed = ["pmh", "medications", "allergies", "social_family"]
 
     if sections_needed:
-        lines.append(f"\nSECTIONS STILL NEEDED: {', '.join(sections_needed)}")
+        lines.append(f"\nYou MUST still ask about: {', '.join(sections_needed)}")
+        lines.append(f"Ask about '{sections_needed[0]}' NOW — one section at a time.")
+        lines.append("Do NOT move to summary until all sections are addressed.")
         if "pmh" in sections_needed:
             lines.append("- PMH: Ask about known conditions, surgeries, hospitalizations.")
         if "medications" in sections_needed:
@@ -511,19 +621,114 @@ def _history_sections(
     return "\n".join(lines) if lines else ""
 
 
-def _summary_section() -> str:
-    return """\
-CURRENT PHASE: SUMMARY & CONFIRMATION
-- Read back key findings to the patient: "Let me make sure I have this right..."
-- Summarize: chief complaint, key symptoms, timeline, severity, relevant history.
-- Ask the patient to confirm or correct anything.
-- When confirmed, include [INTAKE:summary_confirmed=true] and [INTAKE:phase=complete]"""
+def _safety_netting_section(
+    protocol: ComplaintProtocol | None = None,
+) -> str:
+    """Build safety netting instructions for end of conversation.
+
+    Every conversation MUST end with complaint-specific worsening signs,
+    time-bounded follow-up, and clear escalation pathway (NICE standard).
+    """
+    lines = [
+        "SAFETY NETTING (MANDATORY — include in your summary):",
+        "After confirming the summary, you MUST provide safety net advice:",
+    ]
+
+    if protocol:
+        safety = protocol.get("safety_netting")
+        if safety:
+            lines.append(f"\nWorsening signs (VI): {safety['worsening_signs_vi']}")
+            lines.append(f"Worsening signs (EN): {safety['worsening_signs_en']}")
+            lines.append(f"Follow-up timeframe: {safety['follow_up']}")
+            lines.append(f"Escalation: call {safety['escalation']}")
+        else:
+            lines.append(
+                "\nGeneral safety net: Tell patient to seek immediate care if symptoms "
+                "suddenly worsen, new symptoms develop (difficulty breathing, chest pain, "
+                "confusion, uncontrolled bleeding), or they feel something is seriously wrong."
+            )
+    else:
+        lines.append(
+            "\nGeneral safety net: Tell patient to seek immediate care if symptoms "
+            "suddenly worsen, new symptoms develop, or they feel something is seriously wrong."
+        )
+
+    lines.append(
+        "\nPATIENT TEACH-BACK: Ask the patient to repeat back the warning signs:"
+    )
+    lines.append(
+        '"Ban co the nhac lai cho toi nhung dau hieu nguy hiem ma ban can chu y khong?"'
+    )
+    lines.append(
+        '/ "Can you tell me back what warning signs you should watch for?"'
+    )
+
+    return "\n".join(lines)
+
+
+def _summary_section(protocol: ComplaintProtocol | None = None) -> str:
+    lines = [
+        "CURRENT PHASE: SUMMARY & CONFIRMATION",
+        '- Read back key findings to the patient: "Let me make sure I have this right..."',
+        "- Summarize: chief complaint, key symptoms, timeline, severity, relevant history.",
+        "- Ask the patient to confirm or correct anything.",
+        "- HIDDEN CONCERN PROBE: Before finalizing, ask:",
+        '  "Truoc khi ket thuc, co dieu gi ban muon noi them khong?"',
+        '  / "Before we finish, is there anything else you want to mention?"',
+        "- When confirmed, include [INTAKE:summary_confirmed=true] and [INTAKE:phase=complete]",
+    ]
+
+    # Safety netting
+    lines.append("")
+    lines.append(_safety_netting_section(protocol))
+
+    return "\n".join(lines)
 
 
 def _cultural_notes_section(protocol: ComplaintProtocol | None = None) -> str:
     if not protocol or not protocol.get("cultural_notes"):
         return ""
     return f"\nCULTURAL CONTEXT:\n{protocol['cultural_notes']}"
+
+
+def _emergency_confirmation_section(suspected_emergency: dict) -> str:
+    """Build emergency confirmation context for the LLM.
+
+    When tracker.suspected_emergency is set, this section tells the LLM
+    how many confirmation questions remain and what to do next.
+    """
+    reason = suspected_emergency.get("reason", "unknown")
+    asked = suspected_emergency.get("confirmation_questions_asked", 0)
+    remaining = max(0, 2 - asked)
+
+    lines = [
+        "*** ACTIVE EMERGENCY INVESTIGATION ***",
+        f"Suspected emergency reason: {reason}",
+        f"Confirmation questions asked so far: {asked}",
+    ]
+
+    if remaining > 0:
+        lines.append(
+            f"You MUST ask {remaining} more targeted confirmation question(s) "
+            "to determine if this is a true emergency."
+        )
+        lines.append(
+            "Ask ONE calm, specific question about the most dangerous possibility."
+        )
+    else:
+        lines.append(
+            "You have asked enough confirmation questions. "
+            "You MUST now emit EITHER:"
+        )
+        lines.append(
+            "  [INTAKE:emergency_confirmed=REASON] — if emergency is real"
+        )
+        lines.append(
+            "  [INTAKE:emergency_cleared=REASON] — if emergency is ruled out"
+        )
+        lines.append("When in doubt, err on the side of caution → confirm.")
+
+    return "\n".join(lines)
 
 
 # === Main Composer ===
@@ -557,10 +762,6 @@ def compose_intake_prompt(
     """
     sections = [_ROLE_DEFINITION, _CORE_RULES, _EMERGENCY_DETECTION_INSTRUCTIONS]
 
-    # Inject emergency confirmation context if suspected emergency is active
-    if tracker and tracker.suspected_emergency:
-        sections.append(_emergency_confirmation_section(tracker.suspected_emergency))
-
     # Determine current phase
     phase = tracker.phase if tracker else "greeting"
 
@@ -585,7 +786,7 @@ def compose_intake_prompt(
         if history_text:
             sections.append(f"CURRENT PHASE: HISTORY COLLECTION\n{history_text}")
     elif phase == "summary":
-        sections.append(_summary_section())
+        sections.append(_summary_section(complaint_protocol))
     elif phase == "complete":
         sections.append(
             "INTAKE COMPLETE. Thank the patient and let them know a physician "
@@ -602,6 +803,10 @@ def compose_intake_prompt(
     cultural = _cultural_notes_section(complaint_protocol)
     if cultural:
         sections.append(cultural)
+
+    # Emergency confirmation context (when suspected emergency is active)
+    if tracker and tracker.suspected_emergency:
+        sections.append(_emergency_confirmation_section(tracker.suspected_emergency))
 
     # Marker instructions (always included)
     sections.append(_MARKER_INSTRUCTIONS)

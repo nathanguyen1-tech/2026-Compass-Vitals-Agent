@@ -111,11 +111,20 @@ async def run_care_flow(session_id: str):
                 error=str(e),
             )
 
-    # Generate care plan + SOAP note only if critic approved
+    # Generate care plan + SOAP note after screening completes
+    # (even if critic didn't approve — clinician still needs to see the data)
     care_plan = None
-    if session.get("critic_approved"):
+    if session.get("screening_result") is not None:
         care_plan = generate_care_plan(session, session_id)
         session["_care_plan"] = care_plan.model_dump()
+
+        # Flag needs_human_review if critic didn't approve
+        if not session.get("critic_approved"):
+            session["needs_human_review"] = True
+            session.setdefault(
+                "human_review_reason",
+                "Critic did not approve — manual physician review required",
+            )
 
         # Generate SOAP note (GPT-4 — non-blocking on failure)
         try:
@@ -124,7 +133,7 @@ async def run_care_flow(session_id: str):
         except Exception as e:
             logger.error("soap.generation_failed", session_id=session_id, error=str(e))
 
-    current_agent = "complete" if session.get("critic_approved") else "critic"
+    current_agent = "complete" if care_plan is not None else "critic"
 
     logger.info(
         "flow.completed",
