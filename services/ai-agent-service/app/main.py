@@ -59,6 +59,18 @@ async def compass_exception_handler(request, exc: CompassBaseException):
     )
 
 
+@app.exception_handler(Exception)
+async def generic_exception_handler(request, exc: Exception):
+    """Catch-all handler to surface hidden 500 errors."""
+    import traceback
+    tb = traceback.format_exc()
+    logger.error("unhandled_exception", error=str(exc), traceback=tb)
+    return JSONResponse(
+        status_code=500,
+        content={"error": {"code": "INTERNAL_ERROR", "message": str(exc)}},
+    )
+
+
 @app.get("/health")
 async def health_check():
     return {"status": "healthy", "service": settings.service_name}
@@ -106,10 +118,17 @@ async def logs_ui():
     return (STATIC_DIR / "logs.html").read_text(encoding="utf-8")
 
 
+@app.get("/chat-v2", response_class=HTMLResponse)
+async def chat_v2_ui():
+    """Serve the Intake Agent V2 Chat UI."""
+    return (STATIC_DIR / "chat-v2.html").read_text(encoding="utf-8")
+
+
 # Import and register routers after app creation to avoid circular imports
-from app.api.v1.routes import chat, flow, logs, voice_ws  # noqa: E402
+from app.api.v1.routes import chat, chat_v2, flow, logs, voice_ws  # noqa: E402
 
 app.include_router(chat.router, prefix="/api/v1", tags=["chat"])
+app.include_router(chat_v2.router, prefix="/api/v1", tags=["chat-v2"])
 app.include_router(flow.router, prefix="/api/v1", tags=["flow"])
 app.include_router(voice_ws.router, prefix="/api/v1", tags=["voice"])
 app.include_router(logs.router, prefix="/api/v1", tags=["logs"])
