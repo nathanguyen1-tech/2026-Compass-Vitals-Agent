@@ -9,7 +9,6 @@ import json
 from datetime import datetime, timezone
 
 import structlog
-from langchain_core.messages import HumanMessage
 
 from app.agents.prompts.clinical_summary_v2_prompt import (
     CLINICAL_SUMMARY_V2_SYSTEM_PROMPT,
@@ -42,6 +41,16 @@ def _build_clinical_summary_context(state: CareFlowState) -> str:
     tracker_data = state.get("intake_tracker")
     tracker = IntakeTracker(data=tracker_data) if tracker_data else None
     intake_data = state.get("intake_data") or {}
+
+    # === Demographics ===
+    age = (tracker.age if tracker else None) or intake_data.get("age")
+    gender = (tracker.gender if tracker else None) or intake_data.get("gender")
+    if age or gender:
+        parts.append(f"\n=== DEMOGRAPHICS ===")
+        if age:
+            parts.append(f"  Age: {age}")
+        if gender:
+            parts.append(f"  Gender: {gender}")
 
     # === Chief Complaint ===
     cc = ""
@@ -165,14 +174,14 @@ def _build_clinical_summary_context(state: CareFlowState) -> str:
             reasoning = dx.get("reasoning", "")
             parts.append(f"  - {name} ({name_vi}) [{conf}%]: {reasoning}")
 
-    # --- Conversation Excerpts ---
-    messages = state.get("messages", [])
-    if messages:
-        parts.append("\n=== RELEVANT CONVERSATION EXCERPTS ===")
-        for msg in messages[-20:]:
-            role = "Patient" if isinstance(msg, HumanMessage) else "AI Agent"
-            content = msg.content if hasattr(msg, "content") else str(msg)
-            parts.append(f"  [{role}]: {content[:500]}")
+    # NOTE: Raw conversation excerpts excluded to avoid PHI leakage.
+    # All clinically relevant data is captured in structured fields above.
+
+    # --- Active Symptoms (cross-message accumulator) ---
+    if tracker and tracker.active_symptoms:
+        parts.append("\n=== ACTIVE SYMPTOMS ===")
+        for symptom in tracker.active_symptoms:
+            parts.append(f"  - {symptom}")
 
     # --- Flags ---
     if state.get("is_emergency"):

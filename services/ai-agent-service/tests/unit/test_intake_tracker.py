@@ -65,8 +65,8 @@ class TestPreExistingHistory:
         t = IntakeTracker(existing_history={
             "pmh": "HTN", "medications": "Lisinopril", "allergies": "NKDA"
         })
-        # PMH=10% + Meds=10% + Allergies=10% = 30%
-        assert t.get_completeness_score() == 0.30
+        # PMH=8% + Meds=8% + Allergies=8% = 24%
+        assert t.get_completeness_score() == 0.24
 
 
 class TestSerialization:
@@ -208,6 +208,8 @@ class TestCompleteness:
 
     def test_minimum_complete_true(self):
         t = IntakeTracker()
+        t.age = "45"
+        t.gender = "male"
         t.cc = "headache"
         # Fill 6 OLDCARTS
         for field in ["onset", "location", "duration", "character", "aggravating", "severity"]:
@@ -223,6 +225,20 @@ class TestCompleteness:
         t.red_flags_checked.append("thunderclap_headache")
         assert t.is_minimum_complete() is True
 
+    def test_minimum_complete_false_without_demographics(self):
+        t = IntakeTracker()
+        t.cc = "headache"
+        for field in ["onset", "location", "duration", "character", "aggravating", "severity"]:
+            t.hpi[field] = "some value"
+        t.ros_systems["neurological"] = "positive"
+        t.ros_systems["ophthalmologic"] = "negative"
+        t.pmh_complete = True
+        t.medications_complete = True
+        t.allergies_complete = True
+        t.red_flags_checked.append("thunderclap_headache")
+        # Missing age and gender
+        assert t.is_minimum_complete() is False
+
     def test_missing_sections(self):
         t = IntakeTracker()
         missing = t.get_missing_sections()
@@ -232,6 +248,8 @@ class TestCompleteness:
 
     def test_completeness_score_full(self):
         t = IntakeTracker()
+        t.age = "45"
+        t.gender = "male"
         t.cc = "headache"
         for field in ["onset", "location", "duration", "character",
                        "aggravating", "alleviating", "timing", "severity"]:
@@ -416,6 +434,8 @@ class TestRelevantOldcarts:
     def test_minimum_complete_with_reduced_fields(self):
         """Hypertension-like: 4 relevant fields, need 3."""
         t = IntakeTracker()
+        t.age = "55"
+        t.gender = "female"
         t.set_relevant_oldcarts(["onset", "duration", "aggravating", "severity"])
         t.cc = "high blood pressure"
         t.hpi["onset"] = "2 weeks"
@@ -578,3 +598,203 @@ class TestRiskLevelTracking:
         t.update_field("risk_level", "low")
         t.update_field("risk_level", "moderate")
         assert t.should_auto_escalate() is False
+
+
+class TestDemographics:
+    """Tests for age and gender tracking."""
+
+    def test_fresh_tracker_no_demographics(self):
+        t = IntakeTracker()
+        assert t.age is None
+        assert t.gender is None
+
+    def test_update_age(self):
+        t = IntakeTracker()
+        t.update_field("age", "45")
+        assert t.age == "45"
+
+    def test_update_gender(self):
+        t = IntakeTracker()
+        t.update_field("gender", "male")
+        assert t.gender == "male"
+
+    def test_empty_age_ignored(self):
+        t = IntakeTracker()
+        t.update_field("age", "")
+        assert t.age is None
+
+    def test_whitespace_age_ignored(self):
+        t = IntakeTracker()
+        t.update_field("age", "   ")
+        assert t.age is None
+
+    def test_empty_gender_ignored(self):
+        t = IntakeTracker()
+        t.update_field("gender", "")
+        assert t.gender is None
+
+    def test_age_stripped(self):
+        t = IntakeTracker()
+        t.update_field("age", "  45  ")
+        assert t.age == "45"
+
+    def test_gender_stripped(self):
+        t = IntakeTracker()
+        t.update_field("gender", "  female  ")
+        assert t.gender == "female"
+
+    def test_serialization_preserves_demographics(self):
+        t = IntakeTracker()
+        t.age = "50"
+        t.gender = "male"
+        data = t.to_dict()
+        t2 = IntakeTracker(data=data)
+        assert t2.age == "50"
+        assert t2.gender == "male"
+
+    def test_export_includes_demographics(self):
+        t = IntakeTracker()
+        t.age = "45"
+        t.gender = "female"
+        t.cc = "headache"
+        data = t.to_intake_data()
+        assert data["age"] == "45"
+        assert data["gender"] == "female"
+
+    def test_export_excludes_missing_demographics(self):
+        t = IntakeTracker()
+        t.cc = "headache"
+        data = t.to_intake_data()
+        assert "age" not in data
+        assert "gender" not in data
+
+    def test_existing_history_age_gender(self):
+        t = IntakeTracker(existing_history={"age": 55, "gender": "male"})
+        assert t.age == "55"
+        assert t.gender == "male"
+
+    def test_completeness_score_includes_demographics(self):
+        t = IntakeTracker()
+        t.age = "45"
+        t.gender = "male"
+        # Only demographics: 2.5% + 2.5% = 5%
+        assert t.get_completeness_score() == 0.05
+
+
+class TestEmptyValueRejection:
+    """Tests for rejecting empty/whitespace values in history fields."""
+
+    def test_empty_pmh_not_marked_complete(self):
+        t = IntakeTracker()
+        t.update_field("pmh", "")
+        assert t.pmh_complete is False
+        assert t.pmh is None
+
+    def test_whitespace_pmh_not_marked_complete(self):
+        t = IntakeTracker()
+        t.update_field("pmh", "   ")
+        assert t.pmh_complete is False
+
+    def test_valid_pmh_marked_complete(self):
+        t = IntakeTracker()
+        t.update_field("pmh", "none")
+        assert t.pmh_complete is True
+        assert t.pmh == "none"
+
+    def test_empty_medications_not_marked_complete(self):
+        t = IntakeTracker()
+        t.update_field("medications", "")
+        assert t.medications_complete is False
+
+    def test_valid_medications_marked_complete(self):
+        t = IntakeTracker()
+        t.update_field("medications", "khong co")
+        assert t.medications_complete is True
+
+    def test_empty_allergies_not_marked_complete(self):
+        t = IntakeTracker()
+        t.update_field("allergies", "")
+        assert t.allergies_complete is False
+
+    def test_valid_allergies_marked_complete(self):
+        t = IntakeTracker()
+        t.update_field("allergies", "NKDA")
+        assert t.allergies_complete is True
+
+    def test_empty_social_family_not_marked_complete(self):
+        t = IntakeTracker()
+        t.update_field("social_family", "")
+        assert t.social_family_complete is False
+
+    def test_valid_social_family_marked_complete(self):
+        t = IntakeTracker()
+        t.update_field("social_family", "non-smoker")
+        assert t.social_family_complete is True
+
+
+class TestEmergencySymptomCombo:
+    """Tests for has_emergency_symptom_combo() — dangerous symptom accumulations."""
+
+    def test_fever_plus_breathing_is_emergency(self):
+        t = IntakeTracker()
+        t.add_symptom("sot cao")
+        t.add_symptom("kho tho")
+        assert t.has_emergency_symptom_combo() is True
+
+    def test_fever_plus_altered_speech_is_emergency(self):
+        t = IntakeTracker()
+        t.add_symptom("sot")
+        t.add_symptom("khong the noi")
+        assert t.has_emergency_symptom_combo() is True
+
+    def test_chest_pain_plus_breathing_is_emergency(self):
+        t = IntakeTracker()
+        t.add_symptom("dau nguc")
+        t.add_symptom("kho tho")
+        assert t.has_emergency_symptom_combo() is True
+
+    def test_severe_pain_plus_breathing_is_emergency(self):
+        t = IntakeTracker()
+        t.add_symptom("dau du doi")
+        t.add_symptom("kho tho")
+        assert t.has_emergency_symptom_combo() is True
+
+    def test_meningitis_triad_is_emergency(self):
+        t = IntakeTracker()
+        t.add_symptom("dau dau du doi")
+        t.add_symptom("sot")
+        t.add_symptom("buon non")
+        assert t.has_emergency_symptom_combo() is True
+
+    def test_high_risk_plus_three_symptoms_is_emergency(self):
+        t = IntakeTracker()
+        t.risk_level = "high"
+        t.add_symptom("met moi")
+        t.add_symptom("chong mat")
+        t.add_symptom("buon non")
+        assert t.has_emergency_symptom_combo() is True
+
+    def test_single_symptom_no_emergency(self):
+        t = IntakeTracker()
+        t.add_symptom("dau bung")
+        assert t.has_emergency_symptom_combo() is False
+
+    def test_two_mild_symptoms_no_emergency(self):
+        t = IntakeTracker()
+        t.add_symptom("dau bung")
+        t.add_symptom("buon non")
+        assert t.has_emergency_symptom_combo() is False
+
+    def test_cc_field_contributes_to_combo(self):
+        """CC field 'sot cao' + active_symptom 'kho tho' should trigger."""
+        t = IntakeTracker()
+        t.cc = "sot cao"
+        t.add_symptom("kho tho")
+        assert t.has_emergency_symptom_combo() is True
+
+    def test_hpi_severity_contributes_to_combo(self):
+        """HPI severity 'du doi' + breathing symptom should trigger."""
+        t = IntakeTracker()
+        t.hpi["severity"] = "dau du doi"
+        t.add_symptom("kho tho")
+        assert t.has_emergency_symptom_combo() is True

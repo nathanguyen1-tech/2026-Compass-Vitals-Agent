@@ -173,11 +173,12 @@ class TestBuildSoapContext:
         assert "nong trong" in ctx
         assert "internal heat" in ctx
 
-    def test_includes_conversation_excerpts(self):
+    def test_excludes_raw_conversation_excerpts(self):
+        """Conversation excerpts excluded to prevent PHI leakage."""
         state = _make_state()
         ctx = _build_soap_context(state)
-        assert "[Patient]:" in ctx
-        assert "dau bung" in ctx
+        assert "[Patient]" not in ctx
+        assert "CONVERSATION EXCERPTS" not in ctx
 
     def test_includes_drug_interactions(self):
         state = _make_state(

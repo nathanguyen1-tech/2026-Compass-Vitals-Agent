@@ -339,17 +339,19 @@
                 if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.detail || `HTTP ${res.status}`); }
                 const data = await res.json();
                 addSystemMessage(`Analysis complete! Severity: ${(data.severity || 'N/A').toUpperCase()} | Critic: ${data.critic_approved ? 'Approved' : 'Needs Review'}`);
-                if (data.care_plan_ready) {
-                    addSystemMessage('Care Plan ready!');
-                    dashboardLink.style.display = 'inline';
-                    dashboardLink.href = `/dashboard?session=${sessionId}`;
-                    // Show links to all 3 MD views
-                    const viewLinks = [];
-                    if (data.clinical_summary_ready) viewLinks.push(`<a href="/clinical-summary?session=${sessionId}">Clinical Summary</a>`);
-                    if (data.clinical_summary_v2_ready) viewLinks.push(`<a href="/clinical-summary-v2?session=${sessionId}">Summary v2</a>`);
-                    if (data.soap_note_ready) viewLinks.push(`<a href="/soap-note?session=${sessionId}">SOAP Note</a>`);
-                    viewLinks.push(`<a href="/care-plan?session=${sessionId}">Care Plan</a>`);
-                    viewLinks.push(`<a href="/dashboard?session=${sessionId}">Dashboard</a>`);
+                if (!data.critic_approved) {
+                    addSystemMessage('\u26A0\uFE0F C\u1EA7n b\u00E1c s\u0129 xem x\u00E9t (Needs physician review)');
+                }
+                // Show links for all available views
+                dashboardLink.style.display = 'inline';
+                dashboardLink.href = `/dashboard?session=${sessionId}`;
+                const viewLinks = [];
+                if (data.clinical_summary_ready) viewLinks.push(`<a href="/clinical-summary?session=${sessionId}">Clinical Summary</a>`);
+                if (data.clinical_summary_v2_ready) viewLinks.push(`<a href="/clinical-summary-v2?session=${sessionId}">Summary v2</a>`);
+                if (data.soap_note_ready) viewLinks.push(`<a href="/soap-note?session=${sessionId}">SOAP Note</a>`);
+                if (data.care_plan_ready) viewLinks.push(`<a href="/care-plan?session=${sessionId}">Care Plan</a>`);
+                viewLinks.push(`<a href="/dashboard?session=${sessionId}">Dashboard</a>`);
+                if (viewLinks.length > 0) {
                     const linksDiv = document.createElement('div');
                     linksDiv.className = 'message system-msg';
                     linksDiv.innerHTML = viewLinks.join(' &bull; ');

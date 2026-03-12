@@ -237,10 +237,11 @@ class TestBuildClinicalSummaryContext:
         assert "Gastritis" in ctx
         assert "45%" in ctx
 
-    def test_includes_conversation_excerpts(self):
+    def test_excludes_raw_conversation_excerpts(self):
+        """Conversation excerpts excluded to prevent PHI leakage."""
         ctx = _build_clinical_summary_context(_make_state())
-        assert "Toi bi dau bung" in ctx
-        assert "[Patient]" in ctx
+        assert "[Patient]" not in ctx
+        assert "CONVERSATION EXCERPTS" not in ctx
 
     def test_includes_emergency_flag(self):
         ctx = _build_clinical_summary_context(_make_state(is_emergency=True))
