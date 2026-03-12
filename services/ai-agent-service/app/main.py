@@ -3,6 +3,7 @@
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+import sqlalchemy as sa
 import structlog
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -10,6 +11,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
 from app.core.exceptions import CompassBaseException, ClinicalSafetyError, VoiceError
+from app.database.engine import async_engine
 
 STATIC_DIR = Path(__file__).parent / "static"
 
@@ -20,7 +22,12 @@ logger = structlog.get_logger()
 async def lifespan(app: FastAPI):
     """Startup/shutdown lifecycle."""
     logger.info("startup", service=settings.service_name, env=settings.environment)
+    # Verify DB connection on startup
+    async with async_engine.connect() as conn:
+        await conn.execute(sa.text("SELECT 1"))
+    logger.info("database_connected", url=settings.database_url.split("@")[-1])
     yield
+    await async_engine.dispose()
     logger.info("shutdown", service=settings.service_name)
 
 
@@ -106,10 +113,17 @@ async def logs_ui():
     return (STATIC_DIR / "logs.html").read_text(encoding="utf-8")
 
 
+@app.get("/patient-register", response_class=HTMLResponse)
+async def patient_register_ui():
+    """Serve the patient registration form."""
+    return (STATIC_DIR / "patient-register.html").read_text(encoding="utf-8")
+
+
 # Import and register routers after app creation to avoid circular imports
-from app.api.v1.routes import chat, flow, logs, voice_ws  # noqa: E402
+from app.api.v1.routes import chat, flow, logs, patients, voice_ws  # noqa: E402
 
 app.include_router(chat.router, prefix="/api/v1", tags=["chat"])
 app.include_router(flow.router, prefix="/api/v1", tags=["flow"])
 app.include_router(voice_ws.router, prefix="/api/v1", tags=["voice"])
 app.include_router(logs.router, prefix="/api/v1", tags=["logs"])
+app.include_router(patients.router, prefix="/api/v1", tags=["patients"])

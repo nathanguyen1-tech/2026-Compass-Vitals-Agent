@@ -13,6 +13,11 @@ class Settings(BaseSettings):
     # Database
     database_url: str = "postgresql+asyncpg://compass:compass_dev@localhost:5432/ai_agent_db"
 
+    @property
+    def database_url_sync(self) -> str:
+        """Sync URL for Alembic migrations (replaces asyncpg → psycopg2)."""
+        return self.database_url.replace("+asyncpg", "+psycopg2")
+
     # Redis
     redis_url: str = "redis://localhost:6379/0"
 

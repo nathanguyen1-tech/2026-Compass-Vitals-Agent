@@ -33,6 +33,7 @@ services:
       - .env
     environment:
       - PYTHONIOENCODING=utf-8
+      - DATABASE_URL=postgresql+asyncpg://compass:compass_dev@postgres:5432/ai_agent_db
     volumes:
       - ./app/static:/app/app/static
     depends_on:

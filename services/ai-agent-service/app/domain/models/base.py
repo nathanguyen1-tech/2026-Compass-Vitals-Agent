@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy import DateTime, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from ulid import ULID
 
 
 class Base(DeclarativeBase):
@@ -18,6 +19,11 @@ class TimestampMixin:
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
+
+
+def generate_ulid() -> str:
+    """Generate a 26-char lowercase ULID — matches PHP Str::lower(Str::ulid())."""
+    return str(ULID()).lower()
 
 
 def generate_uuid() -> str:

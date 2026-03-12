@@ -1,0 +1,1311 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Compass Vitals — Đăng Ký Bệnh Nhân</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f0f2f5;
+            min-height: 100vh;
+        }
+
+        /* Nav */
+        .nav { background: #1a1a2e; padding: 8px 24px; display: flex; gap: 16px; align-items: center; }
+        .nav a { color: #aaa; text-decoration: none; font-size: 13px; padding: 4px 12px; border-radius: 4px; }
+        .nav a:hover, .nav a.active { color: white; background: rgba(255,255,255,0.1); }
+        .nav-brand { color: white; font-weight: 700; font-size: 14px; margin-right: 16px; }
+
+        /* Header */
+        .header {
+            background: linear-gradient(135deg, #00897b, #00695c);
+            color: white;
+            padding: 18px 24px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        }
+        .header-icon { width: 40px; height: 40px; background: rgba(255,255,255,0.2); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 20px; }
+        .header h1 { font-size: 18px; font-weight: 600; }
+        .header p { font-size: 12px; opacity: 0.85; }
+
+        /* Wizard Steps */
+        .steps { background: white; padding: 16px 24px; display: flex; gap: 8px; border-bottom: 1px solid #e0e0e0; overflow-x: auto; }
+        .step {
+            flex: 1; min-width: 180px; padding: 10px 16px; border-radius: 8px; cursor: pointer;
+            border: 2px solid #e0e0e0; text-align: center; transition: all 0.3s;
+        }
+        .step:hover { border-color: #00897b; }
+        .step.active { border-color: #00897b; background: #e0f2f1; }
+        .step.completed { border-color: #4caf50; background: #e8f5e9; }
+        .step-num { font-size: 11px; font-weight: 700; color: #999; }
+        .step.active .step-num { color: #00897b; }
+        .step.completed .step-num { color: #4caf50; }
+        .step-title { font-size: 12px; font-weight: 600; color: #333; margin-top: 2px; }
+
+        /* Content */
+        .content { max-width: 960px; margin: 24px auto; padding: 0 24px; }
+        .phase { display: none; }
+        .phase.active { display: block; }
+
+        /* Cards */
+        .card {
+            background: white; border-radius: 12px; padding: 20px 24px; margin-bottom: 20px;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.08); border: 1px solid #e8e8e8;
+        }
+        .card-title {
+            font-size: 15px; font-weight: 700; color: #1a1a2e; margin-bottom: 16px;
+            padding-bottom: 10px; border-bottom: 2px solid #e0f2f1;
+            display: flex; align-items: center; gap: 8px;
+        }
+        .card-title .icon { font-size: 18px; }
+
+        /* Form */
+        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 14px; }
+        .form-row.three { grid-template-columns: 1fr 1fr 1fr; }
+        .form-row.four { grid-template-columns: 1fr 1fr 1fr 1fr; }
+        .form-row.full { grid-template-columns: 1fr; }
+        .form-group { display: flex; flex-direction: column; gap: 4px; }
+        .form-group label {
+            font-size: 13px; font-weight: 600; color: #333;
+        }
+        .form-group label .en { font-weight: 400; color: #888; font-size: 11px; }
+        .form-group input, .form-group select, .form-group textarea {
+            padding: 8px 12px; border: 1.5px solid #d0d0d0; border-radius: 6px;
+            font-size: 13px; outline: none; transition: border-color 0.2s;
+            font-family: inherit;
+        }
+        .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+            border-color: #00897b; box-shadow: 0 0 0 3px rgba(0,137,123,0.1);
+        }
+        .form-group textarea { resize: vertical; min-height: 60px; }
+        .form-group input[type="checkbox"] { width: 16px; height: 16px; }
+        .check-row { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+        .check-row label { font-size: 13px; font-weight: 500; cursor: pointer; }
+
+        /* Dynamic list */
+        .list-section { margin-top: 12px; }
+        .list-item {
+            background: #fafafa; border: 1px solid #e8e8e8; border-radius: 8px;
+            padding: 14px 16px; margin-bottom: 10px; position: relative;
+        }
+        .list-item .remove-btn {
+            position: absolute; top: 8px; right: 8px; width: 24px; height: 24px;
+            border: none; background: #ffebee; color: #c62828; border-radius: 50%;
+            cursor: pointer; font-size: 14px; font-weight: 700; display: flex;
+            align-items: center; justify-content: center;
+        }
+        .list-item .remove-btn:hover { background: #ffcdd2; }
+        .add-btn {
+            display: inline-flex; align-items: center; gap: 6px;
+            padding: 8px 16px; border: 2px dashed #00897b; background: transparent;
+            color: #00897b; border-radius: 8px; cursor: pointer; font-size: 13px;
+            font-weight: 600; transition: all 0.2s;
+        }
+        .add-btn:hover { background: #e0f2f1; }
+
+        /* JSON field groups */
+        .json-group { background: #f8f9fa; border-radius: 8px; padding: 14px; margin-bottom: 12px; }
+        .json-group-title { font-size: 13px; font-weight: 600; color: #555; margin-bottom: 10px; }
+
+        /* Buttons */
+        .btn-row { display: flex; justify-content: space-between; margin-top: 24px; padding-top: 16px; border-top: 1px solid #e0e0e0; }
+        .btn {
+            padding: 10px 28px; border: none; border-radius: 8px; cursor: pointer;
+            font-size: 14px; font-weight: 600; transition: all 0.2s;
+        }
+        .btn-prev { background: #e0e0e0; color: #555; }
+        .btn-prev:hover { background: #bdbdbd; }
+        .btn-next { background: #00897b; color: white; }
+        .btn-next:hover { background: #00695c; }
+        .btn-submit { background: #2e7d32; color: white; padding: 12px 36px; font-size: 15px; }
+        .btn-submit:hover { background: #1b5e20; }
+        .btn-submit:disabled { background: #a5d6a7; cursor: not-allowed; }
+
+        /* Toast */
+        .toast {
+            position: fixed; bottom: 24px; right: 24px; padding: 14px 24px;
+            border-radius: 8px; color: white; font-size: 14px; font-weight: 500;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.2); z-index: 999;
+            transform: translateX(120%); transition: transform 0.3s ease;
+        }
+        .toast.show { transform: translateX(0); }
+        .toast-success { background: #2e7d32; }
+        .toast-error { background: #c62828; }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .form-row, .form-row.three, .form-row.four { grid-template-columns: 1fr; }
+            .steps { gap: 4px; }
+            .step { min-width: 140px; padding: 8px 10px; }
+        }
+    </style>
+</head>
+<body>
+    <!-- Nav -->
+    <nav class="nav">
+        <span class="nav-brand">Compass Vitals</span>
+        <a href="/">Chat</a>
+        <a href="/dashboard">Dashboard</a>
+        <a href="/patient-register" class="active">Đăng ký BN</a>
+        <a href="/logs">Logs</a>
+    </nav>
+
+    <!-- Header -->
+    <div class="header">
+        <div class="header-icon">📋</div>
+        <div>
+            <h1>Đăng Ký Thông Tin Bệnh Nhân</h1>
+            <p>Patient Registration — Nhập đầy đủ hồ sơ y tế</p>
+        </div>
+    </div>
+
+    <!-- Wizard Steps -->
+    <div class="steps">
+        <div class="step active" onclick="goToPhase(0)">
+            <div class="step-num">GĐ 1</div>
+            <div class="step-title">Thông tin cơ bản & Y tế</div>
+        </div>
+        <div class="step" onclick="goToPhase(1)">
+            <div class="step-num">GĐ 2</div>
+            <div class="step-title">Lịch sử y tế & Xã hội</div>
+        </div>
+        <div class="step" onclick="goToPhase(2)">
+            <div class="step-num">GĐ 3</div>
+            <div class="step-title">Lối sống & Tiêm chủng</div>
+        </div>
+        <div class="step" onclick="goToPhase(3)">
+            <div class="step-num">GĐ 4</div>
+            <div class="step-title">Hồ sơ & Đánh giá</div>
+        </div>
+    </div>
+
+    <!-- Content -->
+    <div class="content">
+
+        <!-- ═══ PHASE 1: Thông tin cơ bản ═══ -->
+        <div class="phase active" id="phase-0">
+
+            <!-- Patient Info -->
+            <div class="card">
+                <div class="card-title"><span class="icon">👤</span> Thông tin cá nhân <span class="en">(Personal Information)</span></div>
+                <div class="form-row three">
+                    <div class="form-group">
+                        <label>Tên đăng nhập <span class="en">(Username)</span></label>
+                        <input type="text" id="username" placeholder="vd: nguyen.an" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Họ & tên đệm <span class="en">(First name)</span></label>
+                        <input type="text" id="first_name" placeholder="Nguyen Van" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Tên <span class="en">(Last name)</span></label>
+                        <input type="text" id="last_name" placeholder="An" required>
+                    </div>
+                </div>
+                <div class="form-row three">
+                    <div class="form-group">
+                        <label>Giới tính <span class="en">(Gender)</span></label>
+                        <select id="gender">
+                            <option value="male">Nam (Male)</option>
+                            <option value="female">Nữ (Female)</option>
+                            <option value="other">Khác (Other)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Ngày sinh <span class="en">(Date of birth)</span></label>
+                        <input type="date" id="date_of_birth" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Ngôn ngữ <span class="en">(Language)</span></label>
+                        <select id="preferred_language">
+                            <option value="vi">Tiếng Việt</option>
+                            <option value="en">English</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Số điện thoại <span class="en">(Phone)</span></label>
+                        <input type="tel" id="phone" placeholder="+1-714-555-0101">
+                    </div>
+                    <div class="form-group">
+                        <label>Email</label>
+                        <input type="email" id="email" placeholder="patient@example.com">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Medical Conditions -->
+            <div class="card">
+                <div class="card-title"><span class="icon">🩺</span> Bệnh lý nền <span class="en">(Medical Conditions)</span></div>
+                <div id="conditions-list" class="list-section"></div>
+                <button class="add-btn" onclick="addCondition()">+ Thêm bệnh lý (Add condition)</button>
+            </div>
+
+            <!-- Medications -->
+            <div class="card">
+                <div class="card-title"><span class="icon">💊</span> Thuốc đang dùng <span class="en">(Current Medications)</span></div>
+                <div id="medications-list" class="list-section"></div>
+                <button class="add-btn" onclick="addMedication()">+ Thêm thuốc (Add medication)</button>
+            </div>
+
+            <!-- Allergies -->
+            <div class="card">
+                <div class="card-title"><span class="icon">⚠️</span> Dị ứng <span class="en">(Allergies)</span></div>
+                <div id="allergies-list" class="list-section"></div>
+                <button class="add-btn" onclick="addAllergy()">+ Thêm dị ứng (Add allergy)</button>
+            </div>
+
+            <div class="btn-row">
+                <div></div>
+                <button class="btn btn-next" onclick="nextPhase()">Tiếp theo → GĐ 2</button>
+            </div>
+        </div>
+
+        <!-- ═══ PHASE 2: Lịch sử y tế & Xã hội ═══ -->
+        <div class="phase" id="phase-1">
+
+            <!-- Surgeries -->
+            <div class="card">
+                <div class="card-title"><span class="icon">🔪</span> Tiền sử phẫu thuật <span class="en">(Surgical History)</span></div>
+                <div id="surgeries-list" class="list-section"></div>
+                <button class="add-btn" onclick="addSurgery()">+ Thêm phẫu thuật (Add surgery)</button>
+            </div>
+
+            <!-- Family History -->
+            <div class="card">
+                <div class="card-title"><span class="icon">👨‍👩‍👧‍👦</span> Tiền sử gia đình <span class="en">(Family History)</span></div>
+                <div id="family-list" class="list-section"></div>
+                <button class="add-btn" onclick="addFamilyHistory()">+ Thêm tiền sử (Add family history)</button>
+            </div>
+
+            <!-- Vital Signs -->
+            <div class="card">
+                <div class="card-title"><span class="icon">❤️</span> Chỉ số sinh hiệu <span class="en">(Vital Signs)</span></div>
+                <div class="form-row four">
+                    <div class="form-group">
+                        <label>Chiều cao cm <span class="en">(Height)</span></label>
+                        <input type="number" step="0.1" id="height_cm" placeholder="165">
+                    </div>
+                    <div class="form-group">
+                        <label>Cân nặng kg <span class="en">(Weight)</span></label>
+                        <input type="number" step="0.1" id="weight_kg" placeholder="70">
+                    </div>
+                    <div class="form-group">
+                        <label>BMI</label>
+                        <input type="number" step="0.1" id="bmi" placeholder="Tự tính" readonly style="background:#f5f5f5;">
+                    </div>
+                    <div class="form-group">
+                        <label>Nguồn đo <span class="en">(Source)</span></label>
+                        <select id="vital_source">
+                            <option value="manual">Thủ công (Manual)</option>
+                            <option value="wearable">Thiết bị đeo (Wearable)</option>
+                            <option value="device">Máy đo (Device)</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-row four">
+                    <div class="form-group">
+                        <label>HA tâm thu <span class="en">(Systolic)</span></label>
+                        <input type="number" id="bp_systolic" placeholder="120 mmHg">
+                    </div>
+                    <div class="form-group">
+                        <label>HA tâm trương <span class="en">(Diastolic)</span></label>
+                        <input type="number" id="bp_diastolic" placeholder="80 mmHg">
+                    </div>
+                    <div class="form-group">
+                        <label>Nhịp tim <span class="en">(Heart rate)</span></label>
+                        <input type="number" id="heart_rate" placeholder="72 bpm">
+                    </div>
+                    <div class="form-group">
+                        <label>SpO2 %</label>
+                        <input type="number" id="spo2" placeholder="98">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Nhiệt độ °C <span class="en">(Temperature)</span></label>
+                        <input type="number" step="0.1" id="temperature_c" placeholder="36.5">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Social History -->
+            <div class="card">
+                <div class="card-title"><span class="icon">🏭</span> Tiền sử xã hội <span class="en">(Social History)</span></div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Nghề nghiệp <span class="en">(Occupation)</span></label>
+                        <input type="text" id="occupation" placeholder="vd: Kỹ sư phần mềm">
+                    </div>
+                    <div class="form-group">
+                        <label>Môi trường làm việc <span class="en">(Work environment)</span></label>
+                        <input type="text" id="work_environment" placeholder="vd: Văn phòng">
+                    </div>
+                </div>
+                <div class="check-row">
+                    <input type="checkbox" id="chemical_exposure">
+                    <label for="chemical_exposure">Tiếp xúc hóa chất <span class="en">(Chemical exposure)</span></label>
+                </div>
+                <div class="form-row full" id="chemical-details-row" style="display:none;">
+                    <div class="form-group">
+                        <label>Chi tiết hóa chất <span class="en">(Details)</span></label>
+                        <input type="text" id="chemical_exposure_details" placeholder="vd: Acetone, dầu nhớt">
+                    </div>
+                </div>
+
+                <!-- Smoking -->
+                <div class="json-group">
+                    <div class="json-group-title">🚬 Hút thuốc (Smoking)</div>
+                    <div class="form-row three">
+                        <div class="form-group">
+                            <label>Tình trạng <span class="en">(Status)</span></label>
+                            <select id="smoking_status">
+                                <option value="never">Chưa bao giờ (Never)</option>
+                                <option value="current">Đang hút (Current)</option>
+                                <option value="former">Đã bỏ (Former)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Số điếu/ngày <span class="en">(Cigs/day)</span></label>
+                            <input type="number" id="cigarettes_per_day" placeholder="0">
+                        </div>
+                        <div class="form-group">
+                            <label>Số năm hút <span class="en">(Years)</span></label>
+                            <input type="number" id="smoking_years" placeholder="0">
+                        </div>
+                    </div>
+                    <div class="check-row">
+                        <input type="checkbox" id="wants_to_quit">
+                        <label for="wants_to_quit">Muốn cai thuốc <span class="en">(Wants to quit)</span></label>
+                    </div>
+                </div>
+
+                <!-- Alcohol -->
+                <div class="json-group">
+                    <div class="json-group-title">🍺 Rượu bia (Alcohol)</div>
+                    <div class="form-row four">
+                        <div class="form-group">
+                            <label>Tình trạng <span class="en">(Status)</span></label>
+                            <select id="alcohol_status">
+                                <option value="never">Không uống (Never)</option>
+                                <option value="occasional">Thỉnh thoảng (Occasional)</option>
+                                <option value="regular">Thường xuyên (Regular)</option>
+                                <option value="heavy">Nặng (Heavy)</option>
+                                <option value="former">Đã bỏ (Former)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Tần suất <span class="en">(Frequency)</span></label>
+                            <input type="text" id="alcohol_frequency" placeholder="vd: 1-2 lần/tuần">
+                        </div>
+                        <div class="form-group">
+                            <label>Loại <span class="en">(Type)</span></label>
+                            <input type="text" id="alcohol_type" placeholder="vd: Bia, rượu">
+                        </div>
+                        <div class="form-group">
+                            <label>Lượng <span class="en">(Amount)</span></label>
+                            <input type="text" id="alcohol_amount" placeholder="vd: 2-3 lon">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Substance -->
+                <div class="check-row">
+                    <input type="checkbox" id="substance_use">
+                    <label for="substance_use">Sử dụng chất kích thích <span class="en">(Substance use)</span></label>
+                </div>
+                <div class="form-row full" id="substance-details-row" style="display:none;">
+                    <div class="form-group">
+                        <label>Chi tiết <span class="en">(Details)</span></label>
+                        <textarea id="substance_details" placeholder="Mô tả chi tiết..."></textarea>
+                    </div>
+                </div>
+            </div>
+
+            <div class="btn-row">
+                <button class="btn btn-prev" onclick="prevPhase()">← GĐ 1</button>
+                <button class="btn btn-next" onclick="nextPhase()">Tiếp theo → GĐ 3</button>
+            </div>
+        </div>
+
+        <!-- ═══ PHASE 3: Lối sống & Tiêm chủng ═══ -->
+        <div class="phase" id="phase-2">
+
+            <!-- Lifestyle -->
+            <div class="card">
+                <div class="card-title"><span class="icon">🥗</span> Dinh dưỡng <span class="en">(Nutrition)</span></div>
+                <div class="form-row three">
+                    <div class="form-group">
+                        <label>Số bữa/ngày <span class="en">(Meals/day)</span></label>
+                        <input type="number" id="meals_per_day" placeholder="3">
+                    </div>
+                    <div class="form-group">
+                        <label>Thức ăn nhanh <span class="en">(Fast food)</span></label>
+                        <select id="fast_food_freq">
+                            <option value="never">Không bao giờ (Never)</option>
+                            <option value="rarely">Hiếm khi (Rarely)</option>
+                            <option value="monthly">Hàng tháng (Monthly)</option>
+                            <option value="weekly">Hàng tuần (Weekly)</option>
+                            <option value="daily">Hàng ngày (Daily)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Cà phê (ly/ngày) <span class="en">(Caffeine cups)</span></label>
+                        <input type="number" id="caffeine_cups" placeholder="2">
+                    </div>
+                </div>
+                <div class="form-row three">
+                    <div class="form-group">
+                        <label>Nước ngọt <span class="en">(Soda freq)</span></label>
+                        <select id="soda_freq">
+                            <option value="never">Không (Never)</option>
+                            <option value="rarely">Hiếm khi (Rarely)</option>
+                            <option value="weekly">Hàng tuần (Weekly)</option>
+                            <option value="daily">Hàng ngày (Daily)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Chế độ ăn đặc biệt <span class="en">(Special diet)</span></label>
+                        <input type="text" id="special_diet" placeholder="vd: low-sodium, diabetic">
+                    </div>
+                </div>
+                <div class="check-row">
+                    <input type="checkbox" id="vegetables_daily">
+                    <label for="vegetables_daily">Ăn rau hàng ngày <span class="en">(Vegetables daily)</span></label>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-title"><span class="icon">🏃</span> Vận động <span class="en">(Exercise)</span></div>
+                <div class="form-row three">
+                    <div class="form-group">
+                        <label>Thời gian tập/tuần (phút) <span class="en">(Minutes/week)</span></label>
+                        <input type="number" id="exercise_minutes_per_week" placeholder="150">
+                    </div>
+                    <div class="form-group">
+                        <label>Giờ ngồi/ngày <span class="en">(Sitting hours)</span></label>
+                        <input type="number" id="sitting_hours" placeholder="8">
+                    </div>
+                </div>
+                <div class="check-row">
+                    <input type="checkbox" id="gym">
+                    <label for="gym">Tập gym <span class="en">(Gym)</span></label>
+                </div>
+                <div class="check-row">
+                    <input type="checkbox" id="walking_daily">
+                    <label for="walking_daily">Đi bộ hàng ngày <span class="en">(Walking daily)</span></label>
+                </div>
+                <div class="check-row">
+                    <input type="checkbox" id="muscle_pain">
+                    <label for="muscle_pain">Đau cơ <span class="en">(Muscle pain)</span></label>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-title"><span class="icon">😴</span> Giấc ngủ <span class="en">(Sleep)</span></div>
+                <div class="form-row four">
+                    <div class="form-group">
+                        <label>Giờ ngủ/đêm <span class="en">(Hours/night)</span></label>
+                        <input type="number" id="hours_per_night" placeholder="7">
+                    </div>
+                    <div class="form-group">
+                        <label>Chất lượng <span class="en">(Quality)</span></label>
+                        <select id="sleep_quality">
+                            <option value="good">Tốt (Good)</option>
+                            <option value="fair">Khá (Fair)</option>
+                            <option value="poor">Kém (Poor)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Giờ đi ngủ <span class="en">(Bedtime)</span></label>
+                        <input type="time" id="bedtime" value="23:00">
+                    </div>
+                    <div class="form-group">
+                        <label>Giờ thức dậy <span class="en">(Wake time)</span></label>
+                        <input type="time" id="wake_time" value="06:30">
+                    </div>
+                </div>
+                <div class="check-row">
+                    <input type="checkbox" id="insomnia">
+                    <label for="insomnia">Mất ngủ <span class="en">(Insomnia)</span></label>
+                </div>
+                <div class="check-row">
+                    <input type="checkbox" id="sleep_aids">
+                    <label for="sleep_aids">Dùng thuốc ngủ <span class="en">(Sleep aids)</span></label>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-title"><span class="icon">🧠</span> Sức khỏe tâm lý <span class="en">(Mental Health)</span></div>
+                <div class="form-row three">
+                    <div class="form-group">
+                        <label>Mức stress (1-10) <span class="en">(Stress level)</span></label>
+                        <input type="number" min="1" max="10" id="stress_level" placeholder="5">
+                    </div>
+                    <div class="form-group">
+                        <label>Nguồn stress <span class="en">(Sources)</span></label>
+                        <input type="text" id="stress_sources" placeholder="vd: work, health, finance">
+                    </div>
+                    <div class="form-group">
+                        <label>Tâm trạng <span class="en">(Mood)</span></label>
+                        <select id="mood">
+                            <option value="good">Tốt (Good)</option>
+                            <option value="fair">Bình thường (Fair)</option>
+                            <option value="poor">Kém (Poor)</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="check-row">
+                    <input type="checkbox" id="anxiety">
+                    <label for="anxiety">Lo âu <span class="en">(Anxiety)</span></label>
+                </div>
+                <div class="check-row">
+                    <input type="checkbox" id="meditation">
+                    <label for="meditation">Thiền/Mindfulness <span class="en">(Meditation)</span></label>
+                </div>
+                <div class="form-group" style="margin-top:8px;">
+                    <label>Hỗ trợ xã hội <span class="en">(Social support)</span></label>
+                    <select id="social_support">
+                        <option value="good">Tốt (Good)</option>
+                        <option value="limited">Hạn chế (Limited)</option>
+                        <option value="none">Không có (None)</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-title"><span class="icon">🏠</span> Tình trạng sống & SDOH <span class="en">(Social Determinants of Health)</span></div>
+                <div class="check-row">
+                    <input type="checkbox" id="housing_stable" checked>
+                    <label for="housing_stable">Nhà ở ổn định <span class="en">(Stable housing)</span></label>
+                </div>
+                <div class="check-row">
+                    <input type="checkbox" id="food_security" checked>
+                    <label for="food_security">Đủ ăn <span class="en">(Food security)</span></label>
+                </div>
+                <div class="check-row">
+                    <input type="checkbox" id="transportation" checked>
+                    <label for="transportation">Có phương tiện di chuyển <span class="en">(Transportation)</span></label>
+                </div>
+                <div class="check-row">
+                    <input type="checkbox" id="sdoh_social_support" checked>
+                    <label for="sdoh_social_support">Hỗ trợ xã hội <span class="en">(Social support)</span></label>
+                </div>
+                <div class="check-row">
+                    <input type="checkbox" id="financial_difficulty">
+                    <label for="financial_difficulty">Khó khăn tài chính <span class="en">(Financial difficulty)</span></label>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-title"><span class="icon">♀️</span> Sức khỏe sinh sản <span class="en">(Reproductive Health)</span></div>
+                <div class="form-row three">
+                    <div class="form-group">
+                        <label>Tình trạng kinh nguyệt <span class="en">(Menstrual status)</span></label>
+                        <select id="menstrual_status">
+                            <option value="">Không áp dụng (N/A)</option>
+                            <option value="regular">Đều (Regular)</option>
+                            <option value="irregular">Không đều (Irregular)</option>
+                            <option value="perimenopause">Tiền mãn kinh (Perimenopause)</option>
+                            <option value="postmenopause">Mãn kinh (Postmenopause)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Số lần mang thai <span class="en">(Pregnancies)</span></label>
+                        <input type="number" id="pregnancies" placeholder="0">
+                    </div>
+                    <div class="form-group">
+                        <label>Tuyến giáp <span class="en">(Thyroid)</span></label>
+                        <select id="thyroid_condition">
+                            <option value="none">Bình thường (None)</option>
+                            <option value="hypothyroid">Suy giáp (Hypothyroid)</option>
+                            <option value="hyperthyroid">Cường giáp (Hyperthyroid)</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="check-row">
+                    <input type="checkbox" id="hormone_therapy">
+                    <label for="hormone_therapy">Liệu pháp hormone <span class="en">(Hormone therapy)</span></label>
+                </div>
+            </div>
+
+            <!-- Functional Status -->
+            <div class="card">
+                <div class="card-title"><span class="icon">🦽</span> Tình trạng chức năng <span class="en">(Functional Status — ADL)</span></div>
+                <div class="form-row three">
+                    <div class="form-group">
+                        <label>Tự chăm sóc <span class="en">(Self care)</span></label>
+                        <select id="self_care">
+                            <option value="independent">Tự lập (Independent)</option>
+                            <option value="needs_some_help">Cần hỗ trợ một phần (Needs some help)</option>
+                            <option value="dependent">Phụ thuộc (Dependent)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Di chuyển <span class="en">(Mobility)</span></label>
+                        <select id="mobility">
+                            <option value="independent">Tự lập (Independent)</option>
+                            <option value="slow_but_independent">Chậm nhưng tự lập (Slow)</option>
+                            <option value="uses_walker">Dùng khung tập đi (Walker)</option>
+                            <option value="wheelchair">Xe lăn (Wheelchair)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Hoạt động hàng ngày <span class="en">(Daily activities)</span></label>
+                        <select id="daily_activities">
+                            <option value="independent">Tự lập (Independent)</option>
+                            <option value="needs_some_help">Cần hỗ trợ (Needs help)</option>
+                            <option value="dependent">Phụ thuộc (Dependent)</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="check-row">
+                    <input type="checkbox" id="needs_assistance">
+                    <label for="needs_assistance">Cần người hỗ trợ <span class="en">(Needs assistance)</span></label>
+                </div>
+            </div>
+
+            <!-- Vaccinations -->
+            <div class="card">
+                <div class="card-title"><span class="icon">💉</span> Tiêm chủng <span class="en">(Vaccinations)</span></div>
+                <div id="vaccinations-list" class="list-section"></div>
+                <button class="add-btn" onclick="addVaccination()">+ Thêm tiêm chủng (Add vaccination)</button>
+            </div>
+
+            <div class="btn-row">
+                <button class="btn btn-prev" onclick="prevPhase()">← GĐ 2</button>
+                <button class="btn btn-next" onclick="nextPhase()">Tiếp theo → GĐ 4</button>
+            </div>
+        </div>
+
+        <!-- ═══ PHASE 4: Hồ sơ & Đánh giá ═══ -->
+        <div class="phase" id="phase-3">
+
+            <!-- Screenings -->
+            <div class="card">
+                <div class="card-title"><span class="icon">🔬</span> Tầm soát & Đánh giá <span class="en">(Screenings & Assessments)</span></div>
+                <div id="screenings-list" class="list-section"></div>
+                <button class="add-btn" onclick="addScreening()">+ Thêm tầm soát (Add screening)</button>
+            </div>
+
+            <!-- Documents -->
+            <div class="card">
+                <div class="card-title"><span class="icon">📁</span> Hồ sơ y tế <span class="en">(Medical Documents)</span></div>
+                <div id="documents-list" class="list-section"></div>
+                <button class="add-btn" onclick="addDocument()">+ Thêm hồ sơ (Add document)</button>
+            </div>
+
+            <div class="btn-row">
+                <button class="btn btn-prev" onclick="prevPhase()">← GĐ 3</button>
+                <button class="btn btn-submit" id="submitBtn" onclick="submitForm()">
+                    ✓ Hoàn tất đăng ký (Submit Registration)
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast -->
+    <div class="toast" id="toast"></div>
+
+<script>
+/* ═══════════════════════════════════════════════════
+   Wizard Navigation
+   ═══════════════════════════════════════════════════ */
+let currentPhase = 0;
+
+function goToPhase(n) {
+    document.querySelectorAll('.phase').forEach((p, i) => {
+        p.classList.toggle('active', i === n);
+    });
+    document.querySelectorAll('.step').forEach((s, i) => {
+        s.classList.remove('active');
+        if (i === n) s.classList.add('active');
+        if (i < n) s.classList.add('completed');
+        else s.classList.remove('completed');
+    });
+    currentPhase = n;
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function nextPhase() { if (currentPhase < 3) goToPhase(currentPhase + 1); }
+function prevPhase() { if (currentPhase > 0) goToPhase(currentPhase - 1); }
+
+/* ═══════════════════════════════════════════════════
+   Dynamic List — Medical Conditions
+   ═══════════════════════════════════════════════════ */
+function addCondition() {
+    const list = document.getElementById('conditions-list');
+    const item = document.createElement('div');
+    item.className = 'list-item';
+    item.innerHTML = `
+        <button class="remove-btn" onclick="this.parentElement.remove()">×</button>
+        <div class="form-row three">
+            <div class="form-group">
+                <label>Tên bệnh <span class="en">(Condition)</span></label>
+                <input type="text" class="cond-name" placeholder="vd: Hypertension">
+            </div>
+            <div class="form-group">
+                <label>Loại <span class="en">(Type)</span></label>
+                <select class="cond-type">
+                    <option value="hypertension">Tăng huyết áp (Hypertension)</option>
+                    <option value="diabetes">Tiểu đường (Diabetes)</option>
+                    <option value="cardiovascular">Tim mạch (Cardiovascular)</option>
+                    <option value="cholesterol">Mỡ máu (Cholesterol)</option>
+                    <option value="asthma">Hen suyễn (Asthma/COPD)</option>
+                    <option value="liver_disease">Gan (Liver)</option>
+                    <option value="kidney_disease">Thận (Kidney)</option>
+                    <option value="cancer">Ung thư (Cancer)</option>
+                    <option value="autoimmune">Tự miễn (Autoimmune)</option>
+                    <option value="mental_disorder">Tâm thần (Mental)</option>
+                    <option value="other">Khác (Other)</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Mức độ <span class="en">(Severity)</span></label>
+                <select class="cond-severity">
+                    <option value="mild">Nhẹ (Mild)</option>
+                    <option value="moderate">Trung bình (Moderate)</option>
+                    <option value="severe">Nặng (Severe)</option>
+                </select>
+            </div>
+        </div>
+        <div class="form-row three">
+            <div class="form-group">
+                <label>Năm chẩn đoán <span class="en">(Diagnosed year)</span></label>
+                <input type="number" class="cond-year" placeholder="2020">
+            </div>
+            <div class="form-group">
+                <label>Trạng thái <span class="en">(Status)</span></label>
+                <select class="cond-status">
+                    <option value="active">Đang hoạt động (Active)</option>
+                    <option value="managed">Kiểm soát (Managed)</option>
+                    <option value="resolved">Đã khỏi (Resolved)</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Ghi chú <span class="en">(Notes)</span></label>
+                <input type="text" class="cond-notes" placeholder="">
+            </div>
+        </div>
+    `;
+    list.appendChild(item);
+}
+
+/* ═══════════════════════════════════════════════════
+   Dynamic List — Medications
+   ═══════════════════════════════════════════════════ */
+function addMedication() {
+    const list = document.getElementById('medications-list');
+    const item = document.createElement('div');
+    item.className = 'list-item';
+    item.innerHTML = `
+        <button class="remove-btn" onclick="this.parentElement.remove()">×</button>
+        <div class="form-row four">
+            <div class="form-group">
+                <label>Tên thuốc <span class="en">(Drug name)</span></label>
+                <input type="text" class="med-drug" placeholder="vd: Metformin">
+            </div>
+            <div class="form-group">
+                <label>Liều <span class="en">(Dosage)</span></label>
+                <input type="text" class="med-dosage" placeholder="vd: 500mg">
+            </div>
+            <div class="form-group">
+                <label>Tần suất <span class="en">(Frequency)</span></label>
+                <input type="text" class="med-freq" placeholder="vd: 2 lần/ngày">
+            </div>
+            <div class="form-group">
+                <label>Loại <span class="en">(Type)</span></label>
+                <select class="med-type">
+                    <option value="prescription">Kê đơn (Prescription)</option>
+                    <option value="otc">Không kê đơn (OTC)</option>
+                    <option value="vitamin">Vitamin</option>
+                    <option value="herbal">Thảo dược (Herbal)</option>
+                    <option value="sleep_aid">Thuốc ngủ (Sleep aid)</option>
+                    <option value="painkiller">Giảm đau (Painkiller)</option>
+                </select>
+            </div>
+        </div>
+    `;
+    list.appendChild(item);
+}
+
+/* ═══════════════════════════════════════════════════
+   Dynamic List — Allergies
+   ═══════════════════════════════════════════════════ */
+function addAllergy() {
+    const list = document.getElementById('allergies-list');
+    const item = document.createElement('div');
+    item.className = 'list-item';
+    item.innerHTML = `
+        <button class="remove-btn" onclick="this.parentElement.remove()">×</button>
+        <div class="form-row four">
+            <div class="form-group">
+                <label>Chất gây dị ứng <span class="en">(Allergen)</span></label>
+                <input type="text" class="allergy-allergen" placeholder="vd: Penicillin">
+            </div>
+            <div class="form-group">
+                <label>Loại <span class="en">(Type)</span></label>
+                <select class="allergy-type">
+                    <option value="drug">Thuốc (Drug)</option>
+                    <option value="food">Thực phẩm (Food)</option>
+                    <option value="environmental">Môi trường (Environmental)</option>
+                    <option value="latex">Latex</option>
+                    <option value="other">Khác (Other)</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Phản ứng <span class="en">(Reaction)</span></label>
+                <input type="text" class="allergy-reaction" placeholder="vd: Phát ban">
+            </div>
+            <div class="form-group">
+                <label>Mức độ <span class="en">(Severity)</span></label>
+                <select class="allergy-severity">
+                    <option value="mild">Nhẹ (Mild)</option>
+                    <option value="moderate">Trung bình (Moderate)</option>
+                    <option value="severe">Nặng (Severe)</option>
+                </select>
+            </div>
+        </div>
+    `;
+    list.appendChild(item);
+}
+
+/* ═══════════════════════════════════════════════════
+   Dynamic List — Surgeries
+   ═══════════════════════════════════════════════════ */
+function addSurgery() {
+    const list = document.getElementById('surgeries-list');
+    const item = document.createElement('div');
+    item.className = 'list-item';
+    item.innerHTML = `
+        <button class="remove-btn" onclick="this.parentElement.remove()">×</button>
+        <div class="form-row four">
+            <div class="form-group">
+                <label>Tên phẫu thuật <span class="en">(Procedure)</span></label>
+                <input type="text" class="surg-name" placeholder="vd: Mổ ruột thừa">
+            </div>
+            <div class="form-group">
+                <label>Năm <span class="en">(Year)</span></label>
+                <input type="number" class="surg-year" placeholder="2020">
+            </div>
+            <div class="form-group">
+                <label>Bệnh viện <span class="en">(Hospital)</span></label>
+                <input type="text" class="surg-hospital" placeholder="">
+            </div>
+            <div class="form-group">
+                <label>Biến chứng <span class="en">(Complications)</span></label>
+                <input type="text" class="surg-comp" placeholder="Không có">
+            </div>
+        </div>
+    `;
+    list.appendChild(item);
+}
+
+/* ═══════════════════════════════════════════════════
+   Dynamic List — Family History
+   ═══════════════════════════════════════════════════ */
+function addFamilyHistory() {
+    const list = document.getElementById('family-list');
+    const item = document.createElement('div');
+    item.className = 'list-item';
+    item.innerHTML = `
+        <button class="remove-btn" onclick="this.parentElement.remove()">×</button>
+        <div class="form-row four">
+            <div class="form-group">
+                <label>Bệnh <span class="en">(Condition)</span></label>
+                <input type="text" class="fam-condition" placeholder="vd: Tiểu đường">
+            </div>
+            <div class="form-group">
+                <label>Quan hệ <span class="en">(Relation)</span></label>
+                <select class="fam-relation">
+                    <option value="father">Cha (Father)</option>
+                    <option value="mother">Mẹ (Mother)</option>
+                    <option value="sibling">Anh chị em (Sibling)</option>
+                    <option value="paternal_grandparent">Ông bà nội (Paternal grandparent)</option>
+                    <option value="maternal_grandparent">Ông bà ngoại (Maternal grandparent)</option>
+                    <option value="other">Khác (Other)</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Tuổi phát bệnh <span class="en">(Age of onset)</span></label>
+                <input type="number" class="fam-age" placeholder="">
+            </div>
+            <div class="form-group">
+                <label>Đã mất? <span class="en">(Deceased)</span></label>
+                <select class="fam-deceased">
+                    <option value="false">Không (No)</option>
+                    <option value="true">Có (Yes)</option>
+                </select>
+            </div>
+        </div>
+    `;
+    list.appendChild(item);
+}
+
+/* ═══════════════════════════════════════════════════
+   Dynamic List — Vaccinations
+   ═══════════════════════════════════════════════════ */
+function addVaccination() {
+    const list = document.getElementById('vaccinations-list');
+    const item = document.createElement('div');
+    item.className = 'list-item';
+    item.innerHTML = `
+        <button class="remove-btn" onclick="this.parentElement.remove()">×</button>
+        <div class="form-row four">
+            <div class="form-group">
+                <label>Tên vaccine <span class="en">(Vaccine name)</span></label>
+                <input type="text" class="vax-name" placeholder="vd: COVID-19 Pfizer">
+            </div>
+            <div class="form-group">
+                <label>Ngày tiêm <span class="en">(Date)</span></label>
+                <input type="date" class="vax-date">
+            </div>
+            <div class="form-group">
+                <label>Mũi số <span class="en">(Dose #)</span></label>
+                <input type="number" class="vax-dose" placeholder="1">
+            </div>
+            <div class="form-group">
+                <label>Nơi tiêm <span class="en">(Provider)</span></label>
+                <input type="text" class="vax-provider" placeholder="">
+            </div>
+        </div>
+    `;
+    list.appendChild(item);
+}
+
+/* ═══════════════════════════════════════════════════
+   Dynamic List — Screenings
+   ═══════════════════════════════════════════════════ */
+function addScreening() {
+    const list = document.getElementById('screenings-list');
+    const item = document.createElement('div');
+    item.className = 'list-item';
+    item.innerHTML = `
+        <button class="remove-btn" onclick="this.parentElement.remove()">×</button>
+        <div class="form-row three">
+            <div class="form-group">
+                <label>Loại tầm soát <span class="en">(Type)</span></label>
+                <select class="scr-type">
+                    <option value="mammogram">Nhũ ảnh (Mammogram)</option>
+                    <option value="colonoscopy">Nội soi đại tràng (Colonoscopy)</option>
+                    <option value="pap_smear">Pap smear</option>
+                    <option value="psa">PSA</option>
+                    <option value="bone_density">Mật độ xương (Bone density)</option>
+                    <option value="eye_exam">Khám mắt (Eye exam)</option>
+                    <option value="dental_exam">Khám nha (Dental exam)</option>
+                    <option value="cognitive_assessment">Đánh giá nhận thức (Cognitive)</option>
+                    <option value="other">Khác (Other)</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Ngày <span class="en">(Date)</span></label>
+                <input type="date" class="scr-date">
+            </div>
+            <div class="form-group">
+                <label>Kết quả <span class="en">(Result)</span></label>
+                <select class="scr-result">
+                    <option value="normal">Bình thường (Normal)</option>
+                    <option value="abnormal">Bất thường (Abnormal)</option>
+                    <option value="pending">Đang chờ (Pending)</option>
+                </select>
+            </div>
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label>Lần tầm soát tiếp <span class="en">(Next due date)</span></label>
+                <input type="date" class="scr-next">
+            </div>
+            <div class="form-group">
+                <label>Ghi chú <span class="en">(Notes)</span></label>
+                <input type="text" class="scr-notes" placeholder="">
+            </div>
+        </div>
+    `;
+    list.appendChild(item);
+}
+
+/* ═══════════════════════════════════════════════════
+   Dynamic List — Documents
+   ═══════════════════════════════════════════════════ */
+function addDocument() {
+    const list = document.getElementById('documents-list');
+    const item = document.createElement('div');
+    item.className = 'list-item';
+    item.innerHTML = `
+        <button class="remove-btn" onclick="this.parentElement.remove()">×</button>
+        <div class="form-row three">
+            <div class="form-group">
+                <label>Loại hồ sơ <span class="en">(Doc type)</span></label>
+                <select class="doc-type">
+                    <option value="lab_result">Xét nghiệm (Lab result)</option>
+                    <option value="imaging">Hình ảnh (Imaging)</option>
+                    <option value="prescription">Đơn thuốc (Prescription)</option>
+                    <option value="medical_record">Bệnh án (Medical record)</option>
+                    <option value="vaccination_record">Sổ tiêm chủng (Vaccination record)</option>
+                    <option value="wearable_data">Dữ liệu thiết bị (Wearable data)</option>
+                    <option value="other">Khác (Other)</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Tên file <span class="en">(File name)</span></label>
+                <input type="text" class="doc-filename" placeholder="vd: xetnghiem_2025.pdf">
+            </div>
+            <div class="form-group">
+                <label>Mô tả <span class="en">(Description)</span></label>
+                <input type="text" class="doc-desc" placeholder="">
+            </div>
+        </div>
+    `;
+    list.appendChild(item);
+}
+
+/* ═══════════════════════════════════════════════════
+   Auto-calc BMI
+   ═══════════════════════════════════════════════════ */
+document.getElementById('height_cm')?.addEventListener('input', calcBMI);
+document.getElementById('weight_kg')?.addEventListener('input', calcBMI);
+function calcBMI() {
+    const h = parseFloat(document.getElementById('height_cm').value);
+    const w = parseFloat(document.getElementById('weight_kg').value);
+    if (h > 0 && w > 0) {
+        document.getElementById('bmi').value = (w / ((h/100) ** 2)).toFixed(1);
+    }
+}
+
+/* Toggle chemical details */
+document.getElementById('chemical_exposure').addEventListener('change', function() {
+    document.getElementById('chemical-details-row').style.display = this.checked ? 'grid' : 'none';
+});
+document.getElementById('substance_use').addEventListener('change', function() {
+    document.getElementById('substance-details-row').style.display = this.checked ? 'grid' : 'none';
+});
+
+/* ═══════════════════════════════════════════════════
+   Collect & Submit
+   ═══════════════════════════════════════════════════ */
+function val(id) { return document.getElementById(id)?.value || null; }
+function numVal(id) { const v = document.getElementById(id)?.value; return v ? Number(v) : null; }
+function checked(id) { return document.getElementById(id)?.checked || false; }
+
+function collectConditions() {
+    return [...document.querySelectorAll('#conditions-list .list-item')].map(el => ({
+        condition_name: el.querySelector('.cond-name').value,
+        condition_type: el.querySelector('.cond-type').value,
+        severity: el.querySelector('.cond-severity').value,
+        diagnosed_year: parseInt(el.querySelector('.cond-year').value) || null,
+        status: el.querySelector('.cond-status').value,
+        notes: el.querySelector('.cond-notes').value || null,
+    })).filter(c => c.condition_name);
+}
+
+function collectMedications() {
+    return [...document.querySelectorAll('#medications-list .list-item')].map(el => ({
+        drug_name: el.querySelector('.med-drug').value,
+        dosage: el.querySelector('.med-dosage').value || null,
+        frequency: el.querySelector('.med-freq').value || null,
+        medication_type: el.querySelector('.med-type').value,
+    })).filter(m => m.drug_name);
+}
+
+function collectAllergies() {
+    return [...document.querySelectorAll('#allergies-list .list-item')].map(el => ({
+        allergen: el.querySelector('.allergy-allergen').value,
+        allergy_type: el.querySelector('.allergy-type').value,
+        reaction: el.querySelector('.allergy-reaction').value || null,
+        severity: el.querySelector('.allergy-severity').value,
+    })).filter(a => a.allergen);
+}
+
+function collectSurgeries() {
+    return [...document.querySelectorAll('#surgeries-list .list-item')].map(el => ({
+        procedure_name: el.querySelector('.surg-name').value,
+        surgery_year: parseInt(el.querySelector('.surg-year').value) || null,
+        hospital: el.querySelector('.surg-hospital').value || null,
+        complications: el.querySelector('.surg-comp').value || null,
+    })).filter(s => s.procedure_name);
+}
+
+function collectFamilyHistories() {
+    return [...document.querySelectorAll('#family-list .list-item')].map(el => ({
+        condition: el.querySelector('.fam-condition').value,
+        relation: el.querySelector('.fam-relation').value,
+        age_of_onset: parseInt(el.querySelector('.fam-age').value) || null,
+        is_deceased: el.querySelector('.fam-deceased').value === 'true',
+    })).filter(f => f.condition);
+}
+
+function collectVaccinations() {
+    return [...document.querySelectorAll('#vaccinations-list .list-item')].map(el => ({
+        vaccine_name: el.querySelector('.vax-name').value,
+        date_administered: el.querySelector('.vax-date').value || null,
+        dose_number: parseInt(el.querySelector('.vax-dose').value) || null,
+        provider: el.querySelector('.vax-provider').value || null,
+    })).filter(v => v.vaccine_name);
+}
+
+function collectScreenings() {
+    return [...document.querySelectorAll('#screenings-list .list-item')].map(el => ({
+        screening_type: el.querySelector('.scr-type').value,
+        screening_date: el.querySelector('.scr-date').value || null,
+        result: el.querySelector('.scr-result').value,
+        next_due_date: el.querySelector('.scr-next').value || null,
+        notes: el.querySelector('.scr-notes').value || null,
+    }));
+}
+
+function collectDocuments() {
+    return [...document.querySelectorAll('#documents-list .list-item')].map(el => ({
+        doc_type: el.querySelector('.doc-type').value,
+        file_name: el.querySelector('.doc-filename').value,
+        description: el.querySelector('.doc-desc').value || null,
+    })).filter(d => d.file_name);
+}
+
+async function submitForm() {
+    const btn = document.getElementById('submitBtn');
+    btn.disabled = true;
+    btn.textContent = '⏳ Đang lưu...';
+
+    const stressSrc = val('stress_sources');
+    const payload = {
+        // Patient
+        patient: {
+            username: val('username'),
+            first_name: val('first_name'),
+            last_name: val('last_name'),
+            gender: val('gender'),
+            date_of_birth: val('date_of_birth'),
+            phone: val('phone'),
+            email: val('email'),
+            preferred_language: val('preferred_language'),
+        },
+        // Phase 1
+        medical_conditions: collectConditions(),
+        medications: collectMedications(),
+        allergies: collectAllergies(),
+        // Phase 2
+        surgeries: collectSurgeries(),
+        family_histories: collectFamilyHistories(),
+        vital_signs: {
+            height_cm: numVal('height_cm'),
+            weight_kg: numVal('weight_kg'),
+            bmi: numVal('bmi'),
+            bp_systolic: numVal('bp_systolic'),
+            bp_diastolic: numVal('bp_diastolic'),
+            heart_rate: numVal('heart_rate'),
+            temperature_c: numVal('temperature_c'),
+            spo2: numVal('spo2'),
+            source: val('vital_source'),
+        },
+        social_history: {
+            occupation: val('occupation'),
+            work_environment: val('work_environment'),
+            chemical_exposure: checked('chemical_exposure'),
+            chemical_exposure_details: val('chemical_exposure_details'),
+            smoking_status: val('smoking_status'),
+            cigarettes_per_day: numVal('cigarettes_per_day'),
+            smoking_years: numVal('smoking_years'),
+            wants_to_quit: checked('wants_to_quit'),
+            alcohol_status: val('alcohol_status'),
+            alcohol_frequency: val('alcohol_frequency'),
+            alcohol_type: val('alcohol_type'),
+            alcohol_amount: val('alcohol_amount'),
+            substance_use: checked('substance_use'),
+            substance_details: val('substance_details'),
+        },
+        // Phase 3
+        lifestyle: {
+            nutrition: {
+                meals_per_day: numVal('meals_per_day'),
+                vegetables_daily: checked('vegetables_daily'),
+                fast_food_freq: val('fast_food_freq'),
+                soda_freq: val('soda_freq'),
+                caffeine_cups: numVal('caffeine_cups'),
+                special_diet: val('special_diet') || 'none',
+            },
+            exercise: {
+                gym: checked('gym'),
+                walking_daily: checked('walking_daily'),
+                sitting_hours: numVal('sitting_hours'),
+                muscle_pain: checked('muscle_pain'),
+                exercise_minutes_per_week: numVal('exercise_minutes_per_week'),
+            },
+            sleep: {
+                hours_per_night: numVal('hours_per_night'),
+                quality: val('sleep_quality'),
+                insomnia: checked('insomnia'),
+                sleep_aids: checked('sleep_aids'),
+                bedtime: val('bedtime'),
+                wake_time: val('wake_time'),
+            },
+            mental_health: {
+                stress_level: numVal('stress_level'),
+                stress_sources: stressSrc ? stressSrc.split(',').map(s => s.trim()) : [],
+                mood: val('mood'),
+                anxiety: checked('anxiety'),
+                meditation: checked('meditation'),
+                social_support: val('social_support'),
+            },
+            functional_status: {
+                self_care: val('self_care'),
+                mobility: val('mobility'),
+                daily_activities: val('daily_activities'),
+                needs_assistance: checked('needs_assistance'),
+            },
+            sdoh: {
+                housing_stable: checked('housing_stable'),
+                food_security: checked('food_security'),
+                transportation: checked('transportation'),
+                social_support: checked('sdoh_social_support'),
+                financial_difficulty: checked('financial_difficulty'),
+            },
+            reproductive_health: val('menstrual_status') ? {
+                menstrual_status: val('menstrual_status'),
+                pregnancies: numVal('pregnancies'),
+                menopause: val('menstrual_status') === 'postmenopause',
+                thyroid_condition: val('thyroid_condition'),
+                hormone_therapy: checked('hormone_therapy'),
+            } : null,
+        },
+        vaccinations: collectVaccinations(),
+        // Phase 4
+        screenings: collectScreenings(),
+        documents: collectDocuments(),
+    };
+
+    try {
+        const res = await fetch('/api/v1/patients', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        });
+        const data = await res.json();
+        if (res.ok) {
+            showToast('Đăng ký thành công! Patient ID: ' + data.patient_id, 'success');
+            btn.textContent = '✓ Đã lưu thành công!';
+        } else {
+            showToast('Lỗi: ' + (data.detail || data.error?.message || 'Unknown error'), 'error');
+            btn.disabled = false;
+            btn.textContent = '✓ Hoàn tất đăng ký (Submit Registration)';
+        }
+    } catch (err) {
+        showToast('Lỗi kết nối: ' + err.message, 'error');
+        btn.disabled = false;
+        btn.textContent = '✓ Hoàn tất đăng ký (Submit Registration)';
+    }
+}
+
+function showToast(msg, type) {
+    const toast = document.getElementById('toast');
+    toast.textContent = msg;
+    toast.className = 'toast toast-' + type + ' show';
+    setTimeout(() => { toast.classList.remove('show'); }, 5000);
+}
+</script>
+</body>
+</html>
