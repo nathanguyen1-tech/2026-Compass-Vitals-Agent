@@ -33,6 +33,8 @@ services:
       - .env
     environment:
       - PYTHONIOENCODING=utf-8
+    volumes:
+      - ./app/static:/app/app/static
     depends_on:
       postgres:
         condition: service_healthy
