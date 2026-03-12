@@ -35,20 +35,22 @@ class TestShouldRunClassifier:
             keyword_detected=True, llm_risk_level=None, message_count=3
         ) is False
 
-    def test_skips_when_llm_reports_high(self):
+    def test_runs_when_llm_reports_high(self):
+        """Classifier runs for high risk as safety net (LLM may not emit emergency marker)."""
         assert should_run_classifier(
             keyword_detected=False, llm_risk_level="high", message_count=3
-        ) is False
+        ) is True
 
     def test_skips_when_llm_reports_moderate(self):
         assert should_run_classifier(
             keyword_detected=False, llm_risk_level="moderate", message_count=3
         ) is False
 
-    def test_skips_when_llm_reports_critical(self):
+    def test_runs_when_llm_reports_critical(self):
+        """Classifier runs for critical risk as safety net."""
         assert should_run_classifier(
             keyword_detected=False, llm_risk_level="critical", message_count=3
-        ) is False
+        ) is True
 
     def test_runs_when_llm_reports_low(self):
         assert should_run_classifier(

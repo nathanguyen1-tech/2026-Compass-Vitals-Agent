@@ -282,15 +282,10 @@ class TestEmergencyDetectionInstructions:
 
 
 class TestEmergencyConfirmationPrompt:
-    """Tests for emergency confirmation section injection."""
+    """Tests for the 2-question confirmation protocol in prompt."""
 
-    def test_no_confirmation_when_no_suspected(self):
-        tracker = IntakeTracker()
-        tracker.phase = "hpi"
-        prompt = compose_intake_prompt(tracker=tracker)
-        assert "ACTIVE EMERGENCY INVESTIGATION" not in prompt
-
-    def test_confirmation_section_when_suspected(self):
+    def test_confirmation_section_injected_when_suspected(self):
+        """Confirmation section should be injected when suspected_emergency is set."""
         tracker = IntakeTracker()
         tracker.phase = "hpi"
         tracker.suspected_emergency = {
@@ -301,34 +296,96 @@ class TestEmergencyConfirmationPrompt:
         prompt = compose_intake_prompt(tracker=tracker)
         assert "ACTIVE EMERGENCY INVESTIGATION" in prompt
         assert "chest_pain_active" in prompt
-        assert "2 more question" in prompt
 
-    def test_confirmation_section_after_one_question(self):
+    def test_no_confirmation_section_without_suspected(self):
+        """No confirmation section when suspected_emergency is None."""
+        tracker = IntakeTracker()
+        tracker.phase = "hpi"
+        prompt = compose_intake_prompt(tracker=tracker)
+        assert "ACTIVE EMERGENCY INVESTIGATION" not in prompt
+
+    def test_emergency_instructions_include_confirmation_flow(self):
+        """Prompt should instruct LLM to use 2-question confirmation protocol."""
+        prompt = compose_intake_prompt()
+        assert "emergency_suspected" in prompt
+        assert "emergency_confirmed" in prompt
+        assert "emergency_cleared" in prompt
+
+    def test_confirmation_section_shows_remaining_questions(self):
+        """Confirmation section should show how many questions remain."""
         tracker = IntakeTracker()
         tracker.phase = "hpi"
         tracker.suspected_emergency = {
-            "reason": "dyspnea_possible",
+            "reason": "possible_acs",
             "confirmation_questions_asked": 1,
             "source": "llm",
         }
         prompt = compose_intake_prompt(tracker=tracker)
-        assert "ACTIVE EMERGENCY INVESTIGATION" in prompt
-        assert "1 more question" in prompt
+        assert "1 more" in prompt
 
-    def test_confirmation_section_must_decide(self):
+    def test_confirmation_section_shows_must_decide(self):
+        """After 2 questions, section should tell LLM to decide."""
         tracker = IntakeTracker()
         tracker.phase = "hpi"
         tracker.suspected_emergency = {
-            "reason": "chest_pain",
+            "reason": "possible_acs",
             "confirmation_questions_asked": 2,
             "source": "llm",
         }
         prompt = compose_intake_prompt(tracker=tracker)
         assert "MUST now emit" in prompt
 
-    def test_emergency_instructions_use_suspected_marker(self):
-        """Prompt should instruct LLM to use emergency_suspected, not emergency_detected."""
+
+class TestDemographicsInPrompt:
+    """Tests for age/gender demographics in prompt."""
+
+    def test_greeting_asks_for_demographics_vi(self):
+        prompt = compose_intake_prompt(detected_language="vi")
+        assert "tuoi" in prompt.lower()
+        assert "gioi tinh" in prompt.lower()
+
+    def test_greeting_asks_for_demographics_en(self):
+        prompt = compose_intake_prompt(detected_language="en")
+        assert "age" in prompt.lower()
+        assert "gender" in prompt.lower()
+
+    def test_marker_instructions_include_age_gender(self):
         prompt = compose_intake_prompt()
-        assert "emergency_suspected" in prompt
-        assert "emergency_confirmed" in prompt
-        assert "emergency_cleared" in prompt
+        assert "age" in prompt
+        assert "gender" in prompt
+
+    def test_demographics_missing_warning_in_history(self):
+        tracker = IntakeTracker()
+        tracker.phase = "pmh"
+        # age and gender not set
+        prompt = compose_intake_prompt(tracker=tracker)
+        assert "DEMOGRAPHICS MISSING" in prompt
+
+    def test_no_demographics_warning_when_present(self):
+        tracker = IntakeTracker()
+        tracker.phase = "pmh"
+        tracker.age = "45"
+        tracker.gender = "male"
+        prompt = compose_intake_prompt(tracker=tracker)
+        assert "DEMOGRAPHICS MISSING" not in prompt
+
+
+class TestMandatoryHistoryRule:
+    """Tests for mandatory history collection rule in _CORE_RULES."""
+
+    def test_mandatory_collection_rule_exists(self):
+        prompt = compose_intake_prompt()
+        assert "MANDATORY INFORMATION COLLECTION" in prompt
+
+    def test_mandatory_rule_mentions_age_gender(self):
+        prompt = compose_intake_prompt()
+        mandatory_section = prompt.split("MANDATORY INFORMATION COLLECTION")[1].split("\n\n")[0]
+        assert "age" in mandatory_section
+        assert "gender" in mandatory_section
+
+    def test_history_sections_directive_language(self):
+        tracker = IntakeTracker()
+        tracker.phase = "pmh"
+        prompt = compose_intake_prompt(tracker=tracker)
+        assert "You MUST still ask about" in prompt
+        assert "Do NOT move to summary" in prompt

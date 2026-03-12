@@ -123,19 +123,17 @@ def should_run_classifier(
     """Smart gate: decide if the safety classifier LLM call is needed.
 
     Returns True when keyword detection found nothing AND the primary LLM
-    either didn't report risk or reported low risk.
+    needs a second opinion. Runs for high/critical because the LLM may
+    report high risk without emitting emergency_suspected marker.
     """
     # If keywords already caught something, no need for classifier
     if keyword_detected:
         return False
 
-    # If the primary LLM reported moderate+ risk, it's already handling it
-    if llm_risk_level and llm_risk_level in ("moderate", "high", "critical"):
+    # Skip only for moderate risk — LLM is handling it but not alarming
+    if llm_risk_level == "moderate":
         return False
 
-    # First substantive message with no keyword match — always run
-    if message_count <= 1:
-        return True
-
-    # Primary LLM said "low" or didn't emit risk_level at all → run classifier
+    # For high/critical: LLM may NOT emit emergency_suspected marker,
+    # so classifier acts as independent safety net
     return True

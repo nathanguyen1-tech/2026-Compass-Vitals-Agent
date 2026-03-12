@@ -8,7 +8,6 @@ import json
 from datetime import datetime, timezone
 
 import structlog
-from langchain_core.messages import HumanMessage
 
 from app.agents.prompts.soap_prompt import SOAP_SYSTEM_PROMPT
 from app.agents.state import CareFlowState
@@ -43,14 +42,16 @@ def _build_soap_context(state: CareFlowState) -> str:
             if value:
                 parts.append(f"  {key}: {value}")
 
-    # --- Conversation Excerpts (for HPI narrative) ---
-    messages = state.get("messages", [])
-    if messages:
-        parts.append("\n=== RELEVANT CONVERSATION EXCERPTS ===")
-        for msg in messages[-15:]:
-            role = "Patient" if isinstance(msg, HumanMessage) else "AI Agent"
-            content = msg.content if hasattr(msg, "content") else str(msg)
-            parts.append(f"  [{role}]: {content[:500]}")
+    # NOTE: Raw conversation excerpts excluded to avoid PHI leakage.
+    # All clinically relevant data is captured in intake_tracker and screening_result.
+
+    # --- Active Symptoms (cross-message accumulator) ---
+    if tracker and isinstance(tracker, dict):
+        active_symptoms = tracker.get("active_symptoms", [])
+        if active_symptoms:
+            parts.append("\n=== ACTIVE SYMPTOMS ===")
+            for symptom in active_symptoms:
+                parts.append(f"  - {symptom}")
 
     # --- Cultural Expressions ---
     cultural = state.get("cultural_expressions", [])
