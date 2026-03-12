@@ -260,7 +260,7 @@ class TestEmergencyDetectionInstructions:
     def test_emergency_instructions_in_greeting(self):
         prompt = compose_intake_prompt(detected_language="vi")
         assert "EMERGENCY DETECTION" in prompt
-        assert "emergency_detected" in prompt
+        assert "emergency_suspected" in prompt
 
     def test_emergency_instructions_in_hpi(self):
         tracker = IntakeTracker()
@@ -279,3 +279,56 @@ class TestEmergencyDetectionInstructions:
         tracker.phase = "summary"
         prompt = compose_intake_prompt(tracker=tracker)
         assert "EMERGENCY DETECTION" in prompt
+
+
+class TestEmergencyConfirmationPrompt:
+    """Tests for emergency confirmation section injection."""
+
+    def test_no_confirmation_when_no_suspected(self):
+        tracker = IntakeTracker()
+        tracker.phase = "hpi"
+        prompt = compose_intake_prompt(tracker=tracker)
+        assert "ACTIVE EMERGENCY INVESTIGATION" not in prompt
+
+    def test_confirmation_section_when_suspected(self):
+        tracker = IntakeTracker()
+        tracker.phase = "hpi"
+        tracker.suspected_emergency = {
+            "reason": "chest_pain_active",
+            "confirmation_questions_asked": 0,
+            "source": "llm",
+        }
+        prompt = compose_intake_prompt(tracker=tracker)
+        assert "ACTIVE EMERGENCY INVESTIGATION" in prompt
+        assert "chest_pain_active" in prompt
+        assert "2 more question" in prompt
+
+    def test_confirmation_section_after_one_question(self):
+        tracker = IntakeTracker()
+        tracker.phase = "hpi"
+        tracker.suspected_emergency = {
+            "reason": "dyspnea_possible",
+            "confirmation_questions_asked": 1,
+            "source": "llm",
+        }
+        prompt = compose_intake_prompt(tracker=tracker)
+        assert "ACTIVE EMERGENCY INVESTIGATION" in prompt
+        assert "1 more question" in prompt
+
+    def test_confirmation_section_must_decide(self):
+        tracker = IntakeTracker()
+        tracker.phase = "hpi"
+        tracker.suspected_emergency = {
+            "reason": "chest_pain",
+            "confirmation_questions_asked": 2,
+            "source": "llm",
+        }
+        prompt = compose_intake_prompt(tracker=tracker)
+        assert "MUST now emit" in prompt
+
+    def test_emergency_instructions_use_suspected_marker(self):
+        """Prompt should instruct LLM to use emergency_suspected, not emergency_detected."""
+        prompt = compose_intake_prompt()
+        assert "emergency_suspected" in prompt
+        assert "emergency_confirmed" in prompt
+        assert "emergency_cleared" in prompt

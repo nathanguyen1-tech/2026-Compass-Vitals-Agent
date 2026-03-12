@@ -4,6 +4,7 @@ from app.agents.tools.emergency_detector import (
     detect_emergency,
     detect_emergency_with_negation,
     detect_high_temperature,
+    detect_instant_emergency,
     get_emergency_keywords_found,
 )
 
@@ -195,7 +196,7 @@ class TestExpandedKeywords:
     # --- Suicide / Self-harm ---
 
     def test_tu_tu_unicode(self):
-        assert detect_emergency("toi muon tu tu") is False  # "tự tử" not "tu tu"
+        assert detect_emergency("toi muon tu tu") is True  # ASCII-folded "tự tử"
         assert detect_emergency("toi muon tự tử") is True
 
     def test_muon_chet_ascii(self):
@@ -302,3 +303,177 @@ class TestNegationDetection:
 
     def test_normal_text_no_trigger(self):
         assert detect_emergency_with_negation("I have a mild headache for 2 days") is False
+
+
+# === INSTANT emergency detection tests ===
+
+
+class TestInstantEmergency:
+    """Tests for detect_instant_emergency() — small keyword set only."""
+
+    # --- INSTANT keywords should trigger ---
+
+    def test_bat_tinh_instant(self):
+        assert detect_instant_emergency("benh nhan bất tỉnh") is True
+
+    def test_co_giat_instant(self):
+        assert detect_instant_emergency("benh nhan co giật") is True
+
+    def test_muon_chet_instant(self):
+        assert detect_instant_emergency("toi muon chet") is True
+
+    def test_suicide_en_instant(self):
+        assert detect_instant_emergency("thinking about suicide") is True
+
+    def test_vomiting_blood_instant(self):
+        assert detect_instant_emergency("I am vomiting blood") is True
+
+    def test_overdose_instant(self):
+        assert detect_instant_emergency("I took an overdose") is True
+
+    def test_temperature_42c_instant(self):
+        assert detect_instant_emergency("sot 42 do C") is True
+
+    # --- NON-instant keywords should NOT trigger ---
+
+    def test_chest_pain_not_instant(self):
+        """'dau nguc' is NOT in INSTANT list — handled by LLM confirmation."""
+        assert detect_instant_emergency("Tôi bị đau ngực rất nặng") is False
+
+    def test_kho_tho_not_instant(self):
+        """'kho tho' is NOT in INSTANT list — handled by LLM."""
+        assert detect_instant_emergency("Tôi khó thở quá") is False
+
+    def test_difficulty_breathing_not_instant(self):
+        assert detect_instant_emergency("I have difficulty breathing") is False
+
+    def test_numbness_not_instant(self):
+        assert detect_instant_emergency("I have numbness on one side") is False
+
+    def test_fainting_not_instant(self):
+        assert detect_instant_emergency("I fainted yesterday") is False
+
+    def test_heart_attack_not_instant(self):
+        assert detect_instant_emergency("I think I'm having a heart attack") is False
+
+    # --- Negation should prevent instant trigger ---
+
+    def test_negated_suicide_not_instant(self):
+        assert detect_instant_emergency("I do not want to die") is False
+
+    def test_negated_bat_tinh_not_instant(self):
+        assert detect_instant_emergency("toi khong bi bất tỉnh") is False
+
+    # --- Critical trauma should trigger instant ---
+
+    def test_gunshot_instant(self):
+        assert detect_instant_emergency("I've been shot, gunshot wound") is True
+
+    def test_choking_instant(self):
+        assert detect_instant_emergency("my child is choking") is True
+
+    def test_bi_ban_instant(self):
+        assert detect_instant_emergency("toi bi ban vao nguoi") is True
+
+    def test_duoi_nuoc_instant(self):
+        assert detect_instant_emergency("con toi bi duoi nuoc") is True
+
+    # --- Normal text ---
+
+    def test_normal_text_not_instant(self):
+        assert detect_instant_emergency("I have a mild headache") is False
+
+
+# === Trauma / Injury keyword detection tests ===
+
+
+class TestTraumaKeywords:
+    """Tests for trauma/injury emergency keywords in both EN and VI."""
+
+    # --- Vietnamese trauma keywords ---
+
+    def test_roi_tu_lau_2(self):
+        """'rơi từ lầu 2' (fell from 2nd floor) should trigger."""
+        assert detect_emergency("toi bi roi tu lau 2") is True
+
+    def test_roi_tu_unicode(self):
+        assert detect_emergency("tôi bị rơi từ tầng 3") is True
+
+    def test_nga_cau_thang(self):
+        assert detect_emergency("toi bi nga cau thang") is True
+
+    def test_nga_tu_tren_cao(self):
+        assert detect_emergency("toi bi nga tu tren cao") is True
+
+    def test_tai_nan_xe(self):
+        assert detect_emergency("toi bi tai nan xe") is True
+
+    def test_tai_nan_giao_thong(self):
+        assert detect_emergency("toi bi tai nan giao thong") is True
+
+    def test_bi_xe_dam(self):
+        assert detect_emergency("toi bi xe dam") is True
+
+    def test_bi_dam(self):
+        """'bị đâm' (stabbed) should trigger."""
+        assert detect_emergency("toi bi dam vao bung") is True
+
+    def test_chan_thuong_dau(self):
+        assert detect_emergency("toi bi chan thuong dau") is True
+
+    def test_gay_xuong(self):
+        assert detect_emergency("toi bi gay xuong chan") is True
+
+    def test_bi_dien_giat(self):
+        assert detect_emergency("toi bi dien giat") is True
+
+    def test_bi_bong(self):
+        assert detect_emergency("toi bi bong tay") is True
+
+    def test_bi_ket(self):
+        assert detect_emergency("toi bi ket trong xe") is True
+
+    # --- English trauma keywords ---
+
+    def test_fell_from_en(self):
+        assert detect_emergency("I fell from the second floor") is True
+
+    def test_fall_from_en(self):
+        assert detect_emergency("I had a fall from a ladder") is True
+
+    def test_car_accident_en(self):
+        assert detect_emergency("I was in a car accident") is True
+
+    def test_motorcycle_accident_en(self):
+        assert detect_emergency("motorcycle accident just happened") is True
+
+    def test_stabbed_en(self):
+        assert detect_emergency("I was stabbed in the arm") is True
+
+    def test_head_injury_en(self):
+        assert detect_emergency("I have a head injury") is True
+
+    def test_broken_bone_en(self):
+        assert detect_emergency("I think I have a broken bone") is True
+
+    def test_electric_shock_en(self):
+        assert detect_emergency("got an electric shock") is True
+
+    def test_severe_burn_en(self):
+        assert detect_emergency("I have a severe burn on my hand") is True
+
+    # --- Negation-aware trauma ---
+
+    def test_negated_fall_not_trigger(self):
+        """'I do not have head injury' should not trigger (direct negation prefix)."""
+        assert detect_emergency_with_negation("I do not have head injury") is False
+
+    # --- Normal text should not trigger ---
+
+    def test_fall_in_love_not_trigger(self):
+        """'fall in love' should not trigger — 'fall from' is the keyword."""
+        assert detect_emergency("I fall in love easily") is False
+
+    def test_roi_vao_not_trigger(self):
+        """'rơi vào' (fall into) without 'từ' should not trigger."""
+        assert detect_emergency("toi roi vao tinh huong kho") is False

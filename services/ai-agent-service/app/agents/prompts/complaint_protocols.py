@@ -7,7 +7,20 @@ Based on clinical-intake-protocol.md.
 
 from __future__ import annotations
 
-from typing import TypedDict
+import unicodedata
+from typing import NotRequired, TypedDict
+
+
+def _strip_vietnamese_diacritics(text: str) -> str:
+    """Remove Vietnamese diacritics for keyword matching.
+
+    Examples: 'đau ngực' → 'dau nguc', 'khó thở' → 'kho tho'
+    """
+    # Handle đ/Đ separately (not decomposable by NFD)
+    text = text.replace("đ", "d").replace("Đ", "D")
+    # Decompose + strip combining marks
+    nfkd = unicodedata.normalize("NFKD", text)
+    return "".join(c for c in nfkd if not unicodedata.combining(c))
 
 
 # === Data Types ===
@@ -39,6 +52,7 @@ class ComplaintProtocol(TypedDict):
     ros_focus: list[str]  # Which ROS systems to target
     cultural_notes: str  # Cultural context for the LLM
     priority_order: str  # "red_flags_first" for chest_pain, "standard" for most
+    clinical_reasoning: NotRequired[dict]  # Clinical decision support for LLM
 
 
 # All 8 OLDCARTS fields — canonical reference list
@@ -91,6 +105,30 @@ PROTOCOLS: dict[str, ComplaintProtocol] = {
             "Many patients track BP at home — ask about their device and readings."
         ),
         "priority_order": "standard",
+        "clinical_reasoning": {
+            "risk_stratification": (
+                "Assess for hypertensive emergency vs urgency:\n"
+                "- BP >180/120 WITH symptoms (headache, vision changes, chest pain, SOB, confusion) = EMERGENCY\n"
+                "- BP >180/120 WITHOUT symptoms = urgent but not emergency\n"
+                "- Ask about home BP readings and trends"
+            ),
+            "investigation_strategy": (
+                "1. Current symptoms? (headache, vision changes, chest pain, SOB, confusion)\n"
+                "2. Last known BP reading? How high?\n"
+                "3. Taking medications regularly? Any missed doses?\n"
+                "IF symptoms present + suspected high BP → emergency_suspected"
+            ),
+            "danger_combinations": [
+                "high BP + headache + vision changes → hypertensive emergency → ER",
+                "high BP + chest pain → possible ACS or aortic dissection → 911",
+                "high BP + confusion → hypertensive encephalopathy → ER",
+                "high BP + pregnancy → preeclampsia → ER",
+            ],
+            "pmh_modifiers": [
+                "Known HTN + medication non-compliance → higher risk of crisis",
+                "Prior stroke + high BP → higher risk of recurrence",
+            ],
+        },
     },
 
     # --- Tier 1: #2 Diabetes ---
@@ -137,6 +175,32 @@ PROTOCOLS: dict[str, ComplaintProtocol] = {
             "Use Asian-specific BMI cutoffs: overweight >= 23, obese >= 27.5."
         ),
         "priority_order": "standard",
+        "clinical_reasoning": {
+            "risk_stratification": (
+                "Assess for DKA / HHS (diabetic emergencies):\n"
+                "- Known diabetic + nausea/vomiting + confusion + rapid breathing = DKA risk\n"
+                "- Very high glucose + extreme thirst + altered mental status = HHS risk\n"
+                "- Type 1 diabetics at higher DKA risk; Type 2 at higher HHS risk"
+            ),
+            "investigation_strategy": (
+                "1. Known diabetic? Type 1 or 2?\n"
+                "2. Current symptoms: nausea, vomiting, confusion, rapid breathing?\n"
+                "3. Last glucose reading? Last meal?\n"
+                "4. Insulin/medication compliance?\n"
+                "IF nausea + confusion + rapid breathing → emergency_suspected (DKA)"
+            ),
+            "danger_combinations": [
+                "diabetic + nausea + confusion + rapid breathing → DKA → ER",
+                "diabetic + extreme thirst + altered mental status → HHS → ER",
+                "diabetic + fruity breath odor + drowsiness → DKA → ER",
+                "diabetic + not eating + taking insulin → hypoglycemia risk → urgent",
+            ],
+            "pmh_modifiers": [
+                "Type 1 DM → lower threshold for DKA concern",
+                "Prior DKA episodes → higher risk of recurrence",
+                "Elderly + Type 2 DM → HHS risk",
+            ],
+        },
     },
 
     # --- Tier 1: #3 URI / Cough ---
@@ -154,6 +218,7 @@ PROTOCOLS: dict[str, ComplaintProtocol] = {
             "nghet mui", "chay nuoc mui", "dam", "viem hong",
             "trung gio",
             "sot", "sốt", "nhiet do cao", "lanh run", "ớn lạnh",
+            "kho tho", "kho tho duoc",  # dyspnea / respiratory distress
         ],
         "hpi_additions": [
             "Fever? Maximum temperature?",
@@ -195,6 +260,34 @@ PROTOCOLS: dict[str, ComplaintProtocol] = {
             "Ask about traditional remedies like cao gio (coining), giac hoi (cupping)."
         ),
         "priority_order": "standard",
+        "clinical_reasoning": {
+            "risk_stratification": (
+                "Assess for serious respiratory infection vs simple URI:\n"
+                "- High fever (>39°C) + productive cough + SOB = pneumonia risk\n"
+                "- High fever + stiff neck = meningitis concern\n"
+                "- Cough >3 weeks in Vietnamese patient = TB screening critical\n"
+                "- Hemoptysis (coughing blood) = always HIGH risk"
+            ),
+            "investigation_strategy": (
+                "1. Fever? Maximum temperature?\n"
+                "2. Difficulty breathing or SOB?\n"
+                "3. Coughing blood?\n"
+                "4. Stiff neck or worst headache?\n"
+                "IF high fever + SOB → emergency_suspected\n"
+                "IF hemoptysis → emergency_suspected"
+            ),
+            "danger_combinations": [
+                "high fever + stiff neck → meningitis → ER",
+                "coughing blood → hemoptysis workup → ER",
+                "high fever + SOB + productive cough → pneumonia → urgent/ER",
+                "SOB + can't speak full sentences → respiratory distress → 911",
+            ],
+            "pmh_modifiers": [
+                "Immunosuppressed + fever → lower threshold for concern",
+                "COPD/asthma + respiratory infection → higher pneumonia risk",
+                "Vietnamese immigrant + chronic cough → TB screening priority",
+            ],
+        },
     },
 
     # --- Tier 1: #4 Headache ---
@@ -252,6 +345,35 @@ PROTOCOLS: dict[str, ComplaintProtocol] = {
             "Ask about traditional remedies like dau xanh (green oil), cao sao vang."
         ),
         "priority_order": "standard",
+        "clinical_reasoning": {
+            "risk_stratification": (
+                "Assess for life-threatening headache causes:\n"
+                "- Thunderclap onset (maximal in seconds) = SAH until proven otherwise → CRITICAL\n"
+                "- Headache + fever + stiff neck = meningitis → HIGH\n"
+                "- New headache + focal neuro deficit (weakness, vision, speech) = mass/stroke → HIGH\n"
+                "- Headache + papilledema signs (vision changes, worse lying down) = raised ICP → HIGH\n"
+                "- New headache in patient >50 + jaw claudication = giant cell arteritis → HIGH"
+            ),
+            "investigation_strategy": (
+                "1. Is this the WORST headache of your life? Did it come on suddenly?\n"
+                "2. Any fever or stiff neck?\n"
+                "3. Any numbness, weakness, vision changes, or difficulty speaking?\n"
+                "IF thunderclap onset → emergency_suspected immediately\n"
+                "IF fever + stiff neck → emergency_suspected"
+            ),
+            "danger_combinations": [
+                "worst headache ever + sudden onset → possible SAH → 911",
+                "headache + fever + stiff neck → meningitis → ER",
+                "headache + vision loss + weakness → stroke/mass → 911",
+                "headache + confusion + high fever → encephalitis → ER",
+                "new headache + age >50 + jaw pain → giant cell arteritis → urgent",
+            ],
+            "pmh_modifiers": [
+                "Prior aneurysm or SAH → thunderclap headache is higher risk",
+                "Known HTN + severe headache → risk of hemorrhagic stroke",
+                "Immunosuppressed + headache + fever → lower threshold for meningitis concern",
+            ],
+        },
     },
 
     # --- Tier 1: #5 Back Pain / Joint Pain ---
@@ -297,6 +419,35 @@ PROTOCOLS: dict[str, ComplaintProtocol] = {
             "Ask about traditional treatments like bam huyet (acupressure), xoa bop (massage)."
         ),
         "priority_order": "standard",
+        "clinical_reasoning": {
+            "risk_stratification": (
+                "Assess for cauda equina syndrome and spinal emergencies:\n"
+                "- Loss of bowel/bladder control = CRITICAL (cauda equina)\n"
+                "- Saddle anesthesia (numbness between legs) = CRITICAL\n"
+                "- Progressive bilateral leg weakness = CRITICAL\n"
+                "- Back pain + fever = spinal epidural abscess → HIGH\n"
+                "- Back pain after significant trauma = fracture risk → HIGH"
+            ),
+            "investigation_strategy": (
+                "1. Any changes in bowel or bladder control?\n"
+                "2. Any numbness in the area between your legs?\n"
+                "3. Any progressive weakness in your legs?\n"
+                "IF any of these positive → emergency_suspected (cauda equina)\n"
+                "IF back pain + fever → emergency_suspected (spinal infection)"
+            ),
+            "danger_combinations": [
+                "back pain + bladder/bowel dysfunction → cauda equina → ER immediately",
+                "back pain + saddle numbness + leg weakness → cauda equina → ER",
+                "back pain + fever + IV drug use → spinal epidural abscess → ER",
+                "back pain after fall/trauma + unable to move → spinal fracture → 911",
+                "back pain + leg numbness progressing upward → cord compression → ER",
+            ],
+            "pmh_modifiers": [
+                "History of cancer + new back pain → metastatic compression concern",
+                "Osteoporosis + back pain after minor fall → compression fracture risk",
+                "IV drug use + back pain + fever → epidural abscess concern",
+            ],
+        },
     },
 
     # --- Tier 1: #6 Abdominal / GI ---
@@ -347,6 +498,38 @@ PROTOCOLS: dict[str, ComplaintProtocol] = {
             "Vietnamese terminology: viem gan B (Hepatitis B), gan (liver), ung thu gan (liver cancer)."
         ),
         "priority_order": "standard",
+        "clinical_reasoning": {
+            "risk_stratification": (
+                "Assess for surgical abdomen and GI emergencies:\n"
+                "- Severe RLQ pain + fever = appendicitis until proven otherwise → HIGH\n"
+                "- Rigid/board-like abdomen = peritonitis → CRITICAL\n"
+                "- Vomiting blood or bloody/black stool = GI bleed → CRITICAL\n"
+                "- Severe epigastric pain radiating to back = pancreatitis → HIGH\n"
+                "- Abdominal pain + pregnancy = ectopic pregnancy concern → HIGH"
+            ),
+            "investigation_strategy": (
+                "1. Where exactly is the pain? (RLQ = appendix, epigastric = pancreas/ulcer)\n"
+                "2. Any fever?\n"
+                "3. Any blood in stool or vomiting blood?\n"
+                "4. Is your belly hard/rigid?\n"
+                "IF RLQ + fever → emergency_suspected (appendicitis)\n"
+                "IF hematemesis or melena → emergency_suspected"
+            ),
+            "danger_combinations": [
+                "RLQ pain + fever + rebound tenderness → appendicitis → ER",
+                "severe abdominal pain + rigid abdomen → peritonitis → 911",
+                "vomiting blood + dizziness → upper GI bleed → 911",
+                "epigastric pain + radiating to back + vomiting → pancreatitis → ER",
+                "abdominal pain + pregnancy + vaginal bleeding → ectopic → 911",
+                "abdominal pain + distension + no bowel movement → obstruction → ER",
+            ],
+            "pmh_modifiers": [
+                "Prior abdominal surgery → higher risk of adhesive obstruction",
+                "On blood thinners + abdominal pain → internal bleeding risk",
+                "Hepatitis B carrier (common in Vietnamese) → liver cancer screening",
+                "Elderly + abdominal pain → lower threshold (atypical presentations)",
+            ],
+        },
     },
 
     # --- Tier 1: #7 Mental Health ---
@@ -358,11 +541,13 @@ PROTOCOLS: dict[str, ComplaintProtocol] = {
             "depressed", "depression", "anxiety", "anxious", "can't sleep",
             "insomnia", "sad", "stressed", "panic", "worry",
             "hopeless", "no energy", "don't want to live",
+            "suicide", "suicidal", "want to die",
         ],
         "keywords_vi": [
             "tram cam", "lo au", "mat ngu", "buon", "stress",
-            "met moi", "khong muon song", "chan nan", "tuyet vong",
+            "khong muon song", "chan nan", "tuyet vong",
             "lo lang", "hoang loan", "khong ngu duoc",
+            "tu tu", "muon chet",
         ],
         "hpi_additions": [
             "PHQ-2: Have you lost interest in things you used to enjoy?",
@@ -401,6 +586,40 @@ PROTOCOLS: dict[str, ComplaintProtocol] = {
             "Frame questions gently and without judgment."
         ),
         "priority_order": "standard",
+        "clinical_reasoning": {
+            "risk_stratification": (
+                "MANDATORY safety screening for ALL mental health presentations:\n"
+                "- Active suicidal ideation WITH plan or means = CRITICAL → 911 + 988\n"
+                "- Passive ideation ('don't want to be alive', 'better off dead') = HIGH\n"
+                "- Self-harm with current crisis/escalation = HIGH\n"
+                "- Homicidal ideation = CRITICAL\n"
+                "- Psychosis with command hallucinations = HIGH\n"
+                "Note: Vietnamese patients may express distress somatically — 'heavy chest',\n"
+                "'no energy', 'can't eat' may mask severe depression."
+            ),
+            "investigation_strategy": (
+                "MANDATORY FIRST QUESTION (cannot be skipped):\n"
+                "1. 'Have you had thoughts of hurting yourself or not wanting to be alive?'\n"
+                "IF YES → immediately assess:\n"
+                "2. 'Do you have a plan for how you would hurt yourself?'\n"
+                "IF plan exists → emergency_confirmed\n"
+                "IF passive ideation without plan → emergency_suspected, continue assessment"
+            ),
+            "danger_combinations": [
+                "suicidal ideation + specific plan → CRITICAL → 911 + 988 Lifeline",
+                "suicidal ideation + access to means (guns, pills) → CRITICAL",
+                "self-harm + escalating frequency → HIGH",
+                "psychosis + command hallucinations → HIGH",
+                "depression + recent loss + social isolation + substance use → HIGH risk",
+                "prior suicide attempt + current crisis → CRITICAL",
+            ],
+            "pmh_modifiers": [
+                "Prior suicide attempt → significantly higher risk",
+                "History of substance abuse → higher risk",
+                "Recent bereavement or major life change → higher risk",
+                "Chronic pain + depression → higher risk",
+            ],
+        },
     },
 
     # --- Tier 1: #8 Skin Rash ---
@@ -445,6 +664,33 @@ PROTOCOLS: dict[str, ComplaintProtocol] = {
             "These marks should not be confused with abuse or pathology."
         ),
         "priority_order": "standard",
+        "clinical_reasoning": {
+            "risk_stratification": (
+                "Assess for Stevens-Johnson Syndrome (SJS) and severe allergic reactions:\n"
+                "- Rapidly spreading rash + fever + mucosal involvement = SJS → HIGH\n"
+                "- New medication in past 2 weeks + rash + fever = drug reaction → HIGH\n"
+                "- Rash + throat swelling + difficulty breathing = anaphylaxis → CRITICAL\n"
+                "- Petechiae (non-blanching pinpoint dots) + fever = meningococcemia → CRITICAL"
+            ),
+            "investigation_strategy": (
+                "1. Is the rash spreading rapidly? Over how many hours?\n"
+                "2. Any fever with the rash?\n"
+                "3. Any mouth sores, eye redness, or genital sores? (mucosal involvement)\n"
+                "4. Any new medications in the past 2 weeks?\n"
+                "IF rapidly spreading + fever + mucosal → emergency_suspected (SJS)"
+            ),
+            "danger_combinations": [
+                "rapidly spreading rash + fever + mucosal involvement → SJS/TEN → ER",
+                "rash + throat swelling + SOB → anaphylaxis → 911",
+                "non-blanching petechiae + fever → meningococcemia → 911",
+                "new medication + widespread rash + fever → drug hypersensitivity → ER",
+                "blistering rash + skin peeling → TEN → ER",
+            ],
+            "pmh_modifiers": [
+                "Prior drug allergy → higher risk with new medications",
+                "Immunosuppressed + rash + fever → lower threshold for concern",
+            ],
+        },
     },
 
     # --- Tier 1: #9 Urinary ---
@@ -490,6 +736,32 @@ PROTOCOLS: dict[str, ComplaintProtocol] = {
             "Use respectful, clinical language."
         ),
         "priority_order": "standard",
+        "clinical_reasoning": {
+            "risk_stratification": (
+                "Assess for pyelonephritis and urinary retention:\n"
+                "- High fever + flank pain = pyelonephritis → HIGH\n"
+                "- Complete inability to urinate = acute retention → HIGH\n"
+                "- UTI symptoms + pregnancy = higher risk → urgent\n"
+                "- Hematuria + flank pain = kidney stone → urgent (but check for infection)"
+            ),
+            "investigation_strategy": (
+                "1. Any fever or chills?\n"
+                "2. Any flank pain (pain in your back on either side)?\n"
+                "3. Can you urinate at all? Or complete inability?\n"
+                "IF high fever + flank pain → emergency_suspected (pyelonephritis)"
+            ),
+            "danger_combinations": [
+                "high fever + flank pain + chills → pyelonephritis → ER",
+                "UTI + high fever + confusion → urosepsis → ER",
+                "complete urinary retention + pain → acute retention → ER",
+                "hematuria + severe flank pain + fever → infected stone → ER",
+            ],
+            "pmh_modifiers": [
+                "Pregnant + UTI symptoms → lower threshold for treatment",
+                "Diabetic + UTI → higher risk of complicated infection",
+                "Recurrent UTIs → may still be serious if systemic symptoms present",
+            ],
+        },
     },
 
     # --- Tier 1: #10 Fatigue ---
@@ -537,6 +809,34 @@ PROTOCOLS: dict[str, ComplaintProtocol] = {
             "Acknowledge and ask follow-up questions."
         ),
         "priority_order": "standard",
+        "clinical_reasoning": {
+            "risk_stratification": (
+                "Assess for stroke and severe anemia:\n"
+                "- Sudden onset weakness (especially one-sided) = stroke → CRITICAL\n"
+                "- Fatigue + pallor + tachycardia = severe anemia → HIGH\n"
+                "- Fatigue + confusion = multiple dangerous causes → HIGH\n"
+                "- Fatigue + weight loss + night sweats = malignancy concern → urgent"
+            ),
+            "investigation_strategy": (
+                "1. Did the weakness come on SUDDENLY? Especially one side?\n"
+                "2. Any confusion, vision changes, speech difficulty?\n"
+                "3. Any lightheadedness, racing heart, or pallor?\n"
+                "IF sudden + one-sided → emergency_suspected (stroke)\n"
+                "IF confusion + other symptoms → emergency_suspected"
+            ),
+            "danger_combinations": [
+                "sudden weakness + one-sided → stroke → 911",
+                "fatigue + confusion + fever → sepsis/meningitis → ER",
+                "fatigue + racing heart + chest pain → cardiac/PE → ER",
+                "fatigue + heavy bleeding (menstrual or GI) + dizziness → severe anemia → ER",
+                "progressive weakness ascending from legs → Guillain-Barré → ER",
+            ],
+            "pmh_modifiers": [
+                "Known cancer + new fatigue + weight loss → disease progression concern",
+                "Heart failure + worsening fatigue → decompensation concern",
+                "Diabetes + fatigue + confusion → hypoglycemia/DKA concern",
+            ],
+        },
     },
 
     # --- Tier 2: #14 Chest Pain (included for safety criticality) ---
@@ -547,10 +847,12 @@ PROTOCOLS: dict[str, ComplaintProtocol] = {
         "keywords_en": [
             "chest pain", "chest tightness", "chest pressure",
             "chest hurts", "heart pain",
+            "shortness of breath", "difficulty breathing",
         ],
         "keywords_vi": [
             "dau nguc", "tuc nguc", "nang nguc", "dau tim",
             "dau nguc trai",
+            "kho tho",  # dyspnea often presents with chest pain
         ],
         "hpi_additions": [
             "SAFETY Q1: Is the chest pain happening RIGHT NOW?",
@@ -616,6 +918,41 @@ PROTOCOLS: dict[str, ComplaintProtocol] = {
             "Vietnamese emergency: 'Dau nguc co the la dau hieu nghiem trong. Xin hay goi 911 ngay lap tuc.'"
         ),
         "priority_order": "red_flags_first",
+        "clinical_reasoning": {
+            "risk_stratification": (
+                "Evaluate using modified HEART score approach:\n"
+                "- History: typical anginal features? (pressure/squeezing, exertional, relieved by rest)\n"
+                "- Age: >45M or >55F increases risk\n"
+                "- Risk factors: DM, HTN, hyperlipidemia, smoking, family CAD <55\n"
+                "- Character: pressure/squeezing (cardiac) vs sharp/pleuritic vs burning (GERD)\n"
+                "→ Typical + ≥2 risk factors = HIGH risk\n"
+                "→ Atypical + 0 risk factors = LOW risk\n"
+                "→ Active pain + ANY associated symptom = treat as HIGH until proven otherwise"
+            ),
+            "investigation_strategy": (
+                "MANDATORY first 3 questions (safety screen — ask BEFORE any HPI):\n"
+                "1. Is the chest pain happening RIGHT NOW? → acute vs past\n"
+                "2. Associated symptoms? (SOB, sweating, nausea, radiation to arm/jaw/back)\n"
+                "3. History of heart disease, stents, or bypass?\n\n"
+                "IF active pain + ≥1 associated symptom → emergency_suspected\n"
+                "IF resolved + no associated → risk=moderate, continue HPI\n"
+                "IF active + no associated + no risk factors → risk=moderate, ask 1 more"
+            ),
+            "danger_combinations": [
+                "chest pain + dyspnea + diaphoresis → likely ACS → 911",
+                "chest pain + syncope → unstable cardiac → 911",
+                "tearing chest pain + radiating to back → aortic dissection → 911",
+                "chest pain + unilateral leg swelling → PE → 911",
+                "chest pain + palpitations + near-syncope → dangerous arrhythmia → 911",
+                "chest pain + prior MI/stents + any associated → high risk ACS → 911",
+            ],
+            "pmh_modifiers": [
+                "Known CAD / prior MI / stents → ANY chest pain is higher baseline risk",
+                "On blood thinners → bleeding risk if intervention needed",
+                "Cocaine/stimulant use → coronary vasospasm risk even in young patients",
+                "Family history of sudden cardiac death → lower threshold for concern",
+            ],
+        },
     },
 }
 
@@ -640,6 +977,32 @@ FALLBACK_PROTOCOL: ComplaintProtocol = {
         "traditional Vietnamese remedies the patient may have tried."
     ),
     "priority_order": "standard",
+    "clinical_reasoning": {
+        "risk_stratification": (
+            "For unclassified complaints, apply general emergency principles:\n"
+            "- Any trauma / injury with significant mechanism = at minimum MODERATE\n"
+            "- Any altered consciousness or confusion = HIGH\n"
+            "- Any uncontrolled bleeding = HIGH\n"
+            "- Any difficulty breathing = HIGH\n"
+            "- Use your clinical judgment — if something sounds dangerous, it probably is"
+        ),
+        "investigation_strategy": (
+            "1. Is this an acute event or chronic/ongoing?\n"
+            "2. Any danger signs: breathing difficulty, bleeding, confusion, chest pain?\n"
+            "3. Any recent trauma or injury?\n"
+            "IF any danger sign present → emergency_suspected"
+        ),
+        "danger_combinations": [
+            "any complaint + altered consciousness → HIGH",
+            "any complaint + uncontrolled bleeding → HIGH",
+            "any complaint + difficulty breathing → HIGH",
+            "significant trauma + any symptom → HIGH",
+        ],
+        "pmh_modifiers": [
+            "Elderly + any acute change → lower threshold for concern",
+            "Multiple comorbidities + acute complaint → higher risk",
+        ],
+    },
 }
 
 
@@ -651,9 +1014,11 @@ def classify_chief_complaint(text: str) -> str:
 
     Uses keyword matching against each protocol's keywords.
     Scores by total matched keyword character length (longer matches = more specific).
+    Supports both Vietnamese with diacritics and ASCII-folded input.
     Returns protocol ID (e.g., "hypertension", "chest_pain") or "general" if no match.
     """
     text_lower = text.lower()
+    text_ascii = _strip_vietnamese_diacritics(text_lower)
 
     # Check each protocol's keywords
     best_match: str | None = None
@@ -667,7 +1032,8 @@ def classify_chief_complaint(text: str) -> str:
             # from partial word matches (e.g., "oi" in "toi", "met" in "something")
             if len(kw_lower) < 3:
                 continue
-            if kw_lower in text_lower:
+            # Match against both original text and ASCII-folded version
+            if kw_lower in text_lower or kw_lower in text_ascii:
                 # Weight by keyword length — longer = more specific
                 score += len(kw_lower)
         if score > best_score:

@@ -50,6 +50,7 @@ def _make_state(**overrides):
         "created_at": "2026-02-27T00:00:00Z",
         "updated_at": "2026-02-27T00:00:00Z",
         "correlation_id": "test-corr",
+        "intake_tracker": None,
     }
     base.update(overrides)
     return base
@@ -67,9 +68,10 @@ class TestIntakeNodeEmptyMessages:
 
 class TestEmergencyDetection:
     @pytest.mark.asyncio
-    async def test_detects_emergency_dau_nguc(self, mock_gateway, phi):
+    async def test_detects_instant_emergency_bat_tinh(self, mock_gateway, phi):
+        """INSTANT keywords (bất tỉnh) should trigger emergency immediately."""
         state = _make_state(
-            messages=[HumanMessage(content="Tôi bị đau ngực rất nặng, khó thở")]
+            messages=[HumanMessage(content="Bệnh nhân bất tỉnh, co giật")]
         )
         result = await intake_node(state, mock_gateway, phi)
         assert result["is_emergency"] is True
@@ -122,14 +124,15 @@ class TestCulturalExpressions:
 
 
 class TestLLMEmergencyMarkerOverride:
-    """Tests for Tier 3 LLM-detected emergency via [INTAKE:emergency_detected=...] marker."""
+    """Tests for LLM emergency markers: suspected → confirmed → cleared flow."""
 
     @pytest.mark.asyncio
-    async def test_llm_emergency_marker_triggers_emergency(self, mock_gateway, phi):
-        """When LLM emits emergency_detected marker, intake should return emergency."""
+    async def test_legacy_emergency_detected_treated_as_suspected(self, mock_gateway, phi):
+        """Legacy emergency_detected marker should be treated as suspected (not instant trigger)."""
         llm_response_with_marker = LLMResponse(
             content=(
                 "I understand you're feeling pressure on your chest. "
+                "Let me ask: is this happening RIGHT NOW? "
                 "[INTAKE:emergency_detected=probable_acs_indirect_description]"
             ),
             model="gpt-4o-mini",
@@ -141,8 +144,175 @@ class TestLLMEmergencyMarkerOverride:
         )
         mock_gateway._call_with_retry = AsyncMock(return_value=llm_response_with_marker)
         result = await intake_node(state, mock_gateway, phi)
+        # Should NOT be emergency yet — treated as suspected
+        assert result["is_emergency"] is False
+        # Tracker should have suspected_emergency set
+        tracker_data = result["intake_tracker"]
+        assert tracker_data["suspected_emergency"] is not None
+        assert tracker_data["suspected_emergency"]["reason"] == "probable_acs_indirect_description"
+
+    @pytest.mark.asyncio
+    async def test_emergency_suspected_does_not_trigger(self, mock_gateway, phi):
+        """emergency_suspected marker should NOT trigger emergency — starts confirmation."""
+        response = LLMResponse(
+            content=(
+                "Ban dang bi dau nguc NGAY BAY GIO khong? "
+                "[INTAKE:emergency_suspected=chest_pain_description]"
+            ),
+            model="gpt-4o-mini",
+            usage={"prompt_tokens": 100, "completion_tokens": 50, "total_tokens": 150},
+            finish_reason="stop",
+        )
+        state = _make_state(
+            messages=[HumanMessage(content="toi bi dau nguc")]
+        )
+        mock_gateway._call_with_retry = AsyncMock(return_value=response)
+        result = await intake_node(state, mock_gateway, phi)
+        assert result["is_emergency"] is False
+        assert result["intake_tracker"]["suspected_emergency"] is not None
+
+    @pytest.mark.asyncio
+    async def test_emergency_confirmed_after_enough_questions(self, mock_gateway, phi):
+        """emergency_confirmed should trigger after 2+ confirmation questions."""
+        response = LLMResponse(
+            content=(
+                "Based on your answers, this needs immediate attention. "
+                "[INTAKE:emergency_confirmed=severe_acs_with_dyspnea]"
+            ),
+            model="gpt-4o-mini",
+            usage={"prompt_tokens": 100, "completion_tokens": 50, "total_tokens": 150},
+            finish_reason="stop",
+        )
+        state = _make_state(
+            messages=[HumanMessage(content="vang, dang dau du doi lam")],
+            # Pre-seed tracker with suspected_emergency and 2 questions asked
+            intake_tracker={
+                "phase": "hpi",
+                "complaint_category": None,
+                "message_count": 3,
+                "cc": "chest pain",
+                "hpi": {f: None for f in ["onset", "location", "duration", "character",
+                                           "aggravating", "alleviating", "timing", "severity"]},
+                "hpi_additional": {},
+                "relevant_oldcarts": ["onset", "location", "duration", "character",
+                                       "aggravating", "alleviating", "timing", "severity"],
+                "red_flags_checked": [],
+                "red_flags_found": [],
+                "red_flag_screening_done": False,
+                "ros_systems": {},
+                "pmh": None, "pmh_complete": False,
+                "medications": None, "medications_complete": False,
+                "allergies": None, "allergies_complete": False,
+                "social_family": None, "social_family_complete": False,
+                "pmh_prefilled": False, "medications_prefilled": False,
+                "allergies_prefilled": False, "social_family_prefilled": False,
+                "summary_confirmed": False,
+                "emergency_detected_reason": None,
+                "suspected_emergency": {
+                    "reason": "chest_pain_active",
+                    "confirmation_questions_asked": 1,  # Will be incremented to 2 in Step 1b
+                    "source": "llm",
+                },
+            },
+        )
+        mock_gateway._call_with_retry = AsyncMock(return_value=response)
+        result = await intake_node(state, mock_gateway, phi)
         assert result["is_emergency"] is True
-        assert "KHẨN CẤP" in result["messages"][0].content or "EMERGENCY" in result["messages"][0].content
+
+    @pytest.mark.asyncio
+    async def test_emergency_confirmed_too_early_keeps_investigating(self, mock_gateway, phi):
+        """emergency_confirmed with < 2 questions should NOT trigger — keep investigating."""
+        response = LLMResponse(
+            content=(
+                "This sounds serious. [INTAKE:emergency_confirmed=acs_possible]"
+            ),
+            model="gpt-4o-mini",
+            usage={"prompt_tokens": 100, "completion_tokens": 50, "total_tokens": 150},
+            finish_reason="stop",
+        )
+        state = _make_state(
+            messages=[HumanMessage(content="vang toi dau nguc")],
+            intake_tracker={
+                "phase": "cc",
+                "complaint_category": None,
+                "message_count": 1,
+                "cc": None,
+                "hpi": {f: None for f in ["onset", "location", "duration", "character",
+                                           "aggravating", "alleviating", "timing", "severity"]},
+                "hpi_additional": {},
+                "relevant_oldcarts": ["onset", "location", "duration", "character",
+                                       "aggravating", "alleviating", "timing", "severity"],
+                "red_flags_checked": [],
+                "red_flags_found": [],
+                "red_flag_screening_done": False,
+                "ros_systems": {},
+                "pmh": None, "pmh_complete": False,
+                "medications": None, "medications_complete": False,
+                "allergies": None, "allergies_complete": False,
+                "social_family": None, "social_family_complete": False,
+                "pmh_prefilled": False, "medications_prefilled": False,
+                "allergies_prefilled": False, "social_family_prefilled": False,
+                "summary_confirmed": False,
+                "emergency_detected_reason": None,
+                "suspected_emergency": {
+                    "reason": "chest_pain",
+                    "confirmation_questions_asked": 0,  # Will be incremented to 1
+                    "source": "llm",
+                },
+            },
+        )
+        mock_gateway._call_with_retry = AsyncMock(return_value=response)
+        result = await intake_node(state, mock_gateway, phi)
+        # Should NOT be emergency — not enough questions yet
+        assert result["is_emergency"] is False
+
+    @pytest.mark.asyncio
+    async def test_emergency_cleared_continues_normal(self, mock_gateway, phi):
+        """emergency_cleared should clear suspected_emergency and continue."""
+        response = LLMResponse(
+            content=(
+                "Good, that sounds like it resolved. Let's continue. "
+                "[INTAKE:emergency_cleared=mild_past_resolved]"
+            ),
+            model="gpt-4o-mini",
+            usage={"prompt_tokens": 100, "completion_tokens": 50, "total_tokens": 150},
+            finish_reason="stop",
+        )
+        state = _make_state(
+            messages=[HumanMessage(content="khong, hom qua thoi, bay gio het roi")],
+            intake_tracker={
+                "phase": "hpi",
+                "complaint_category": None,
+                "message_count": 3,
+                "cc": "chest discomfort",
+                "hpi": {f: None for f in ["onset", "location", "duration", "character",
+                                           "aggravating", "alleviating", "timing", "severity"]},
+                "hpi_additional": {},
+                "relevant_oldcarts": ["onset", "location", "duration", "character",
+                                       "aggravating", "alleviating", "timing", "severity"],
+                "red_flags_checked": [],
+                "red_flags_found": [],
+                "red_flag_screening_done": False,
+                "ros_systems": {},
+                "pmh": None, "pmh_complete": False,
+                "medications": None, "medications_complete": False,
+                "allergies": None, "allergies_complete": False,
+                "social_family": None, "social_family_complete": False,
+                "pmh_prefilled": False, "medications_prefilled": False,
+                "allergies_prefilled": False, "social_family_prefilled": False,
+                "summary_confirmed": False,
+                "emergency_detected_reason": None,
+                "suspected_emergency": {
+                    "reason": "chest_pain_possible",
+                    "confirmation_questions_asked": 1,
+                    "source": "llm",
+                },
+            },
+        )
+        mock_gateway._call_with_retry = AsyncMock(return_value=response)
+        result = await intake_node(state, mock_gateway, phi)
+        assert result["is_emergency"] is False
+        assert result["intake_tracker"]["suspected_emergency"] is None
 
     @pytest.mark.asyncio
     async def test_no_emergency_marker_returns_normal(self, mock_gateway, phi):
@@ -162,14 +332,139 @@ class TestLLMEmergencyMarkerOverride:
 
 
 class TestNegationInIntakeAgent:
-    """Negated emergency keywords should not trigger emergency in intake_node."""
+    """Negated INSTANT emergency keywords should not trigger emergency in intake_node."""
 
     @pytest.mark.asyncio
-    async def test_negated_chest_pain_not_emergency(self, mock_gateway, phi, mock_response):
-        """'toi khong bi dau nguc' should NOT trigger emergency."""
+    async def test_negated_bat_tinh_not_emergency(self, mock_gateway, phi, mock_response):
+        """'toi khong bi bat tinh' should NOT trigger INSTANT emergency."""
         state = _make_state(
-            messages=[HumanMessage(content="toi không bị đau ngực")]
+            messages=[HumanMessage(content="toi không bị bất tỉnh")]
         )
         mock_gateway._call_with_retry = AsyncMock(return_value=mock_response)
         result = await intake_node(state, mock_gateway, phi)
         assert result["is_emergency"] is False
+
+    @pytest.mark.asyncio
+    async def test_chest_pain_not_instant_goes_to_llm(self, mock_gateway, phi, mock_response):
+        """'dau nguc' is NOT in INSTANT list — should go through LLM, not instant trigger."""
+        state = _make_state(
+            messages=[HumanMessage(content="toi bi đau ngực nhẹ")]
+        )
+        mock_gateway._call_with_retry = AsyncMock(return_value=mock_response)
+        result = await intake_node(state, mock_gateway, phi)
+        # Should NOT be instant emergency — LLM handles this
+        assert result["is_emergency"] is False
+
+    @pytest.mark.asyncio
+    async def test_trauma_fall_triggers_suspected_emergency(self, mock_gateway, phi):
+        """'rơi từ lầu 2' should trigger broad keyword → suspected emergency flow."""
+        state = _make_state(
+            messages=[HumanMessage(content="toi bi roi tu lau 2")]
+        )
+        # LLM response with confirmation question
+        llm_response = LLMResponse(
+            content="Ban co bi dau o dau khong? Co bi chay mau khong? [INTAKE:risk_level=high] [INTAKE:risk_reasoning=fall from height]",
+            model="gpt-4o-mini",
+            usage={"prompt_tokens": 100, "completion_tokens": 50, "total_tokens": 150},
+            finish_reason="stop",
+        )
+        mock_gateway._call_with_retry = AsyncMock(return_value=llm_response)
+        result = await intake_node(state, mock_gateway, phi)
+        # Not instant emergency — goes through LLM confirmation flow
+        assert result["is_emergency"] is False
+        # But tracker should have suspected_emergency set
+        tracker_data = result["intake_tracker"]
+        assert tracker_data["suspected_emergency"] is not None
+        assert "roi tu" in tracker_data["suspected_emergency"]["reason"].lower() or \
+               "keyword_detected" in tracker_data["suspected_emergency"]["reason"]
+
+    @pytest.mark.asyncio
+    async def test_traffic_accident_triggers_suspected(self, mock_gateway, phi):
+        """'tai nan xe' should trigger broad keyword detection."""
+        state = _make_state(
+            messages=[HumanMessage(content="toi bi tai nan xe may")]
+        )
+        llm_response = LLMResponse(
+            content="Ban co bi thuong o dau khong? [INTAKE:risk_level=high]",
+            model="gpt-4o-mini",
+            usage={"prompt_tokens": 100, "completion_tokens": 50, "total_tokens": 150},
+            finish_reason="stop",
+        )
+        mock_gateway._call_with_retry = AsyncMock(return_value=llm_response)
+        result = await intake_node(state, mock_gateway, phi)
+        assert result["is_emergency"] is False
+        tracker_data = result["intake_tracker"]
+        assert tracker_data["suspected_emergency"] is not None
+
+
+class TestSafetyClassifierIntegration:
+    """Tests that the safety classifier catches emergencies keywords miss."""
+
+    @pytest.mark.asyncio
+    async def test_novel_emergency_caught_by_classifier(self, mock_gateway, phi):
+        """Battery ingestion: no keyword match, classifier catches it."""
+        state = _make_state(
+            messages=[HumanMessage(content="con toi 2 tuoi nuot phai cuc pin")]
+        )
+        # Primary LLM: normal response, no emergency markers
+        primary_response = LLMResponse(
+            content="Chao ban, con ban nuot pin khi nao? [INTAKE:risk_level=low] [INTAKE:risk_reasoning=gathering info]",
+            model="gpt-4o-mini",
+            usage={"prompt_tokens": 100, "completion_tokens": 50, "total_tokens": 150},
+            finish_reason="stop",
+        )
+        # Safety classifier: critical emergency
+        classifier_response = LLMResponse(
+            content='{"risk_level":"critical","is_emergency":true,"reasoning":"battery ingestion in child","category":"toxic_ingestion"}',
+            model="gpt-4o-mini",
+            usage={"prompt_tokens": 50, "completion_tokens": 30, "total_tokens": 80},
+            finish_reason="stop",
+        )
+        mock_gateway._call_with_retry = AsyncMock(
+            side_effect=[primary_response, classifier_response]
+        )
+        result = await intake_node(state, mock_gateway, phi)
+        # Not instant emergency, but suspected_emergency should be set by classifier
+        assert result["is_emergency"] is False
+        tracker_data = result["intake_tracker"]
+        assert tracker_data["suspected_emergency"] is not None
+        assert "safety_classifier" in tracker_data["suspected_emergency"]["source"]
+
+    @pytest.mark.asyncio
+    async def test_classifier_skipped_when_keyword_found(self, mock_gateway, phi):
+        """If broad keyword already matched, classifier should NOT run (only 1 LLM call)."""
+        state = _make_state(
+            messages=[HumanMessage(content="toi bi roi tu lau 2")]
+        )
+        # Only 1 response needed: primary LLM (classifier skipped)
+        primary_response = LLMResponse(
+            content="Ban co bi dau o dau khong? [INTAKE:risk_level=high]",
+            model="gpt-4o-mini",
+            usage={"prompt_tokens": 100, "completion_tokens": 50, "total_tokens": 150},
+            finish_reason="stop",
+        )
+        mock_gateway._call_with_retry = AsyncMock(return_value=primary_response)
+        result = await intake_node(state, mock_gateway, phi)
+        # Only 1 LLM call (primary), classifier skipped
+        assert mock_gateway._call_with_retry.call_count == 1
+        # Broad keyword already set suspected_emergency
+        tracker_data = result["intake_tracker"]
+        assert tracker_data["suspected_emergency"] is not None
+        assert tracker_data["suspected_emergency"]["source"] == "broad_keyword"
+
+    @pytest.mark.asyncio
+    async def test_classifier_skipped_when_llm_reports_high(self, mock_gateway, phi):
+        """If primary LLM already reports high risk, classifier should NOT run."""
+        state = _make_state(
+            messages=[HumanMessage(content="toi cam thay rat met va hoa mat")]
+        )
+        primary_response = LLMResponse(
+            content="Ban co bi ngat hoac mat y thuc khong? [INTAKE:risk_level=high] [INTAKE:risk_reasoning=fatigue with dizziness]",
+            model="gpt-4o-mini",
+            usage={"prompt_tokens": 100, "completion_tokens": 50, "total_tokens": 150},
+            finish_reason="stop",
+        )
+        mock_gateway._call_with_retry = AsyncMock(return_value=primary_response)
+        result = await intake_node(state, mock_gateway, phi)
+        # Only 1 LLM call
+        assert mock_gateway._call_with_retry.call_count == 1
