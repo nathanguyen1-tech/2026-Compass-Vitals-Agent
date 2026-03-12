@@ -6,7 +6,7 @@ class Settings(BaseSettings):
 
     # Service
     service_name: str = "ai-agent-service"
-    service_port: int = 8001
+    service_port: int = 8008
     environment: str = "development"
     log_level: str = "INFO"
 

@@ -17,6 +17,6 @@ COPY app/ app/
 ENV PYTHONIOENCODING=utf-8
 ENV PYTHONUNBUFFERED=1
 
-EXPOSE 8001
+EXPOSE ${SERVICE_PORT:-8008}
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8001"]
+CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${SERVICE_PORT:-8008}"]

@@ -28,7 +28,7 @@ services:
   ai-agent:
     build: .
     ports:
-      - "8001:8001"
+      - "${SERVICE_PORT:-8008}:${SERVICE_PORT:-8008}"
     env_file:
       - .env
     environment:
@@ -44,7 +44,7 @@ services:
     restart: unless-stopped
     command:
       - "http"
-      - "ai-agent:8001"
+      - "ai-agent:${SERVICE_PORT:-8008}"
     environment:
       - NGROK_AUTHTOKEN=${NGROK_AUTHTOKEN}
     ports:
