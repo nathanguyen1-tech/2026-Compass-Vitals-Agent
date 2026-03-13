@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Compass Vitals — Đăng Nhập</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f0f2f5;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Nav */
+        .nav { background: #1a1a2e; padding: 8px 24px; display: flex; gap: 16px; align-items: center; }
+        .nav a { color: #aaa; text-decoration: none; font-size: 13px; padding: 4px 12px; border-radius: 4px; }
+        .nav a:hover, .nav a.active { color: white; background: rgba(255,255,255,0.1); }
+        .nav-brand { color: white; font-weight: 700; font-size: 14px; margin-right: 16px; }
+
+        /* Center content */
+        .login-wrapper {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+        }
+
+        .login-card {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 4px 24px rgba(0,0,0,0.1);
+            padding: 48px 40px;
+            width: 100%;
+            max-width: 420px;
+            text-align: center;
+        }
+
+        .login-icon {
+            width: 64px; height: 64px;
+            background: linear-gradient(135deg, #00897b, #00695c);
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 28px; color: white;
+            margin: 0 auto 20px;
+        }
+
+        .login-card h1 {
+            font-size: 22px;
+            font-weight: 700;
+            color: #1a1a2e;
+            margin-bottom: 6px;
+        }
+
+        .login-card p.subtitle {
+            font-size: 13px;
+            color: #888;
+            margin-bottom: 32px;
+        }
+
+        .form-group {
+            text-align: left;
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 13px;
+            font-weight: 600;
+            color: #444;
+            margin-bottom: 6px;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 12px 14px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 15px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .form-group input:focus {
+            border-color: #00897b;
+        }
+
+        .btn-login {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, #00897b, #00695c);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+
+        .btn-login:hover { opacity: 0.9; }
+        .btn-login:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .error-msg {
+            background: #ffebee;
+            color: #c62828;
+            padding: 10px 14px;
+            border-radius: 8px;
+            font-size: 13px;
+            margin-bottom: 16px;
+            display: none;
+        }
+
+        .error-msg.show { display: block; }
+
+        .register-link {
+            margin-top: 20px;
+            font-size: 13px;
+            color: #888;
+        }
+
+        .register-link a {
+            color: #00897b;
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        .register-link a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <nav class="nav">
+        <span class="nav-brand">Compass Vitals</span>
+        <a href="/" class="active">Chat</a>
+        <a href="/dashboard">Dashboard</a>
+        <a href="/patient-register">Đăng Ký</a>
+        <a href="/login" class="active">Đăng Nhập</a>
+    </nav>
+
+    <div class="login-wrapper">
+        <div class="login-card">
+            <div class="login-icon">👤</div>
+            <h1>Đăng Nhập (Login)</h1>
+            <p class="subtitle">Nhập tên đăng nhập để truy cập hồ sơ bệnh nhân</p>
+
+            <div class="error-msg" id="errorMsg"></div>
+
+            <form onsubmit="handleLogin(event)">
+                <div class="form-group">
+                    <label for="username">Tên đăng nhập (Username)</label>
+                    <input
+                        type="text"
+                        id="username"
+                        name="username"
+                        placeholder="vd: nguyen.an"
+                        autocomplete="username"
+                        required
+                        autofocus
+                    >
+                </div>
+
+                <button type="submit" class="btn-login" id="loginBtn">
+                    Đăng Nhập (Login)
+                </button>
+            </form>
+
+            <p class="register-link">
+                Chưa có tài khoản? <a href="/patient-register">Đăng ký ngay</a>
+            </p>
+        </div>
+    </div>
+
+<script>
+async function handleLogin(e) {
+    e.preventDefault();
+    const btn = document.getElementById('loginBtn');
+    const errEl = document.getElementById('errorMsg');
+    const username = document.getElementById('username').value.trim();
+
+    if (!username) return;
+
+    btn.disabled = true;
+    btn.textContent = 'Đang kiểm tra...';
+    errEl.classList.remove('show');
+
+    try {
+        const res = await fetch('/api/v1/patients/' + encodeURIComponent(username));
+        if (res.ok) {
+            // Save username to sessionStorage and redirect
+            sessionStorage.setItem('patient_username', username);
+            window.location.href = '/patient-dashboard?username=' + encodeURIComponent(username);
+        } else if (res.status === 404) {
+            errEl.textContent = 'Không tìm thấy tài khoản "' + username + '". Vui lòng kiểm tra lại hoặc đăng ký mới.';
+            errEl.classList.add('show');
+        } else {
+            const data = await res.json();
+            errEl.textContent = 'Lỗi: ' + (data.detail || 'Unknown error');
+            errEl.classList.add('show');
+        }
+    } catch (err) {
+        errEl.textContent = 'Lỗi kết nối: ' + err.message;
+        errEl.classList.add('show');
+    }
+
+    btn.disabled = false;
+    btn.textContent = 'Đăng Nhập (Login)';
+}
+</script>
+</body>
+</html>

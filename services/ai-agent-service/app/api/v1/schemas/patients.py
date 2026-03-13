@@ -154,3 +154,111 @@ class PatientRegisterResponse(BaseModel):
     patient_id: str
     username: str
     message: str = "Patient registered successfully"
+
+
+# --- Patient profile response (GET by username) ---
+
+class MedicalConditionOut(BaseModel):
+    condition_name: str
+    condition_type: str
+    severity: str | None = None
+    diagnosed_year: int | None = None
+    status: str = "active"
+    notes: str | None = None
+
+class MedicationOut(BaseModel):
+    drug_name: str
+    dosage: str | None = None
+    frequency: str | None = None
+    route: str | None = None
+    medication_type: str = "prescription"
+    start_date: date | None = None
+    is_current: bool = True
+    prescribed_by: str | None = None
+    notes: str | None = None
+
+class AllergyOut(BaseModel):
+    allergen: str
+    allergy_type: str
+    reaction: str | None = None
+    severity: str = "mild"
+    notes: str | None = None
+
+class SurgeryOut(BaseModel):
+    procedure_name: str
+    surgery_year: int | None = None
+    hospital: str | None = None
+    complications: str | None = None
+    notes: str | None = None
+
+class FamilyHistoryOut(BaseModel):
+    condition: str
+    relation: str
+    age_of_onset: int | None = None
+    is_deceased: bool = False
+    cause_of_death: str | None = None
+    notes: str | None = None
+
+class VitalSignsOut(BaseModel):
+    height_cm: float | None = None
+    weight_kg: float | None = None
+    bmi: float | None = None
+    bp_systolic: int | None = None
+    bp_diastolic: int | None = None
+    heart_rate: int | None = None
+    temperature_c: float | None = None
+    spo2: int | None = None
+    source: str = "manual"
+
+class SocialHistoryOut(BaseModel):
+    occupation: str | None = None
+    work_environment: str | None = None
+    chemical_exposure: bool = False
+    smoking_status: str = "never"
+    alcohol_status: str = "never"
+    substance_use: bool = False
+
+class LifestyleOut(BaseModel):
+    nutrition: dict | None = None
+    exercise: dict | None = None
+    sleep: dict | None = None
+    mental_health: dict | None = None
+    functional_status: dict | None = None
+    sdoh: dict | None = None
+    reproductive_health: dict | None = None
+
+class VaccinationOut(BaseModel):
+    vaccine_name: str
+    date_administered: date | None = None
+    dose_number: int | None = None
+    provider: str | None = None
+
+class ScreeningOut(BaseModel):
+    screening_type: str
+    screening_date: date | None = None
+    result: str | None = None
+    provider: str | None = None
+    next_due_date: date | None = None
+
+class PatientProfileResponse(BaseModel):
+    patient_id: str
+    username: str
+    first_name: str
+    last_name: str
+    gender: str
+    date_of_birth: date
+    phone: str | None = None
+    email: str | None = None
+    preferred_language: str = "vi"
+    onboarding_phase: int = 0
+    onboarding_status: str = "pending"
+    medical_conditions: list[MedicalConditionOut] = []
+    medications: list[MedicationOut] = []
+    allergies: list[AllergyOut] = []
+    surgeries: list[SurgeryOut] = []
+    family_histories: list[FamilyHistoryOut] = []
+    vital_signs: VitalSignsOut | None = None
+    social_history: SocialHistoryOut | None = None
+    lifestyle: LifestyleOut | None = None
+    vaccinations: list[VaccinationOut] = []
+    screenings: list[ScreeningOut] = []

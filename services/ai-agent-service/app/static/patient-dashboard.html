@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Compass Vitals — Hồ Sơ Bệnh Nhân</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f0f2f5;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* Nav */
+        .nav { background: #1a1a2e; padding: 8px 24px; display: flex; gap: 16px; align-items: center; flex-shrink: 0; }
+        .nav a { color: #aaa; text-decoration: none; font-size: 13px; padding: 4px 12px; border-radius: 4px; }
+        .nav a:hover, .nav a.active { color: white; background: rgba(255,255,255,0.1); }
+        .nav-brand { color: white; font-weight: 700; font-size: 14px; margin-right: 16px; }
+        .nav-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+        .nav-user { color: #ccc; font-size: 12px; }
+        .btn-logout { color: #ff8a80; font-size: 12px; cursor: pointer; background: none; border: 1px solid #ff8a80; padding: 3px 10px; border-radius: 4px; }
+        .btn-logout:hover { background: rgba(255,138,128,0.15); }
+
+        /* Main layout */
+        .main {
+            flex: 1;
+            display: flex;
+            overflow: hidden;
+        }
+
+        /* Left panel — patient info (30%) */
+        .panel-left {
+            width: 30%;
+            min-width: 320px;
+            background: white;
+            border-right: 1px solid #e0e0e0;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .patient-header {
+            background: linear-gradient(135deg, #00897b, #00695c);
+            color: white;
+            padding: 20px;
+            flex-shrink: 0;
+        }
+
+        .patient-header .name {
+            font-size: 20px;
+            font-weight: 700;
+        }
+
+        .patient-header .meta {
+            font-size: 12px;
+            opacity: 0.85;
+            margin-top: 4px;
+        }
+
+        .patient-header .badges {
+            display: flex;
+            gap: 6px;
+            margin-top: 10px;
+            flex-wrap: wrap;
+        }
+
+        .badge {
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+            background: rgba(255,255,255,0.2);
+        }
+
+        .badge-status {
+            background: #4caf50;
+            color: white;
+        }
+
+        .patient-body {
+            flex: 1;
+            overflow-y: auto;
+            padding: 0;
+        }
+
+        /* Accordion sections */
+        .section {
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .section-header {
+            padding: 12px 20px;
+            font-size: 13px;
+            font-weight: 700;
+            color: #333;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            user-select: none;
+            transition: background 0.15s;
+        }
+
+        .section-header:hover { background: #f8f9fa; }
+
+        .section-header .arrow {
+            font-size: 10px;
+            transition: transform 0.2s;
+            color: #999;
+        }
+
+        .section.open .section-header .arrow { transform: rotate(90deg); }
+
+        .section-body {
+            display: none;
+            padding: 0 20px 14px;
+        }
+
+        .section.open .section-body { display: block; }
+
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 4px 0;
+            font-size: 12px;
+            border-bottom: 1px solid #f5f5f5;
+        }
+
+        .info-row:last-child { border-bottom: none; }
+
+        .info-label { color: #888; }
+        .info-value { color: #333; font-weight: 500; text-align: right; max-width: 60%; }
+
+        .tag-list { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+
+        .tag {
+            padding: 2px 8px;
+            background: #e8f5e9;
+            color: #2e7d32;
+            border-radius: 4px;
+            font-size: 11px;
+        }
+
+        .tag-warn { background: #fff3e0; color: #e65100; }
+        .tag-danger { background: #ffebee; color: #c62828; }
+
+        .empty-note {
+            font-size: 12px;
+            color: #bbb;
+            font-style: italic;
+        }
+
+        /* Right panel — chat placeholder (70%) */
+        .panel-right {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: #fafafa;
+        }
+
+        .chat-placeholder {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            gap: 12px;
+            color: #bbb;
+        }
+
+        .chat-placeholder-icon {
+            width: 80px; height: 80px;
+            background: #e0e0e0;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 36px;
+        }
+
+        .chat-placeholder p {
+            font-size: 14px;
+        }
+
+        .chat-placeholder .hint {
+            font-size: 12px;
+            color: #ccc;
+        }
+
+        /* Loading */
+        .loading {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #888;
+            font-size: 14px;
+        }
+
+        .spinner {
+            width: 24px; height: 24px;
+            border: 3px solid #e0e0e0;
+            border-top-color: #00897b;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-right: 10px;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+    <nav class="nav">
+        <span class="nav-brand">Compass Vitals</span>
+        <div class="nav-right">
+            <span class="nav-user" id="navUser"></span>
+            <button class="btn-logout" onclick="logout()">Đăng xuất</button>
+        </div>
+    </nav>
+
+    <div class="main">
+        <!-- Left 30% — Patient Info -->
+        <div class="panel-left">
+            <div id="loadingPanel" class="loading">
+                <div class="spinner"></div> Đang tải hồ sơ...
+            </div>
+
+            <div id="patientPanel" style="display:none; flex-direction:column; flex:1; overflow:hidden;">
+                <div class="patient-header" id="patientHeader"></div>
+                <div class="patient-body" id="patientBody"></div>
+            </div>
+        </div>
+
+        <!-- Right 70% — Chat (placeholder) -->
+        <div class="panel-right">
+            <div class="chat-placeholder">
+                <div class="chat-placeholder-icon">💬</div>
+                <p>Khu vực Chat (Chat Area)</p>
+                <span class="hint">Tính năng chat sẽ được tích hợp tại đây</span>
+            </div>
+        </div>
+    </div>
+
+<script>
+const GENDER_MAP = { male: 'Nam', female: 'Nữ', other: 'Khác' };
+const SEVERITY_MAP = { mild: 'Nhẹ', moderate: 'Trung bình', severe: 'Nặng' };
+const SMOKING_MAP = { never: 'Không', current: 'Đang hút', former: 'Đã bỏ' };
+const ALCOHOL_MAP = { never: 'Không', occasional: 'Thỉnh thoảng', regular: 'Thường xuyên', heavy: 'Nhiều' };
+
+function getUsername() {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('username') || sessionStorage.getItem('patient_username');
+}
+
+function logout() {
+    sessionStorage.removeItem('patient_username');
+    window.location.href = '/login';
+}
+
+function calcAge(dob) {
+    const d = new Date(dob);
+    const now = new Date();
+    let age = now.getFullYear() - d.getFullYear();
+    if (now.getMonth() < d.getMonth() || (now.getMonth() === d.getMonth() && now.getDate() < d.getDate())) age--;
+    return age;
+}
+
+function row(label, value) {
+    if (value === null || value === undefined || value === '') return '';
+    return `<div class="info-row"><span class="info-label">${label}</span><span class="info-value">${value}</span></div>`;
+}
+
+function section(id, title, contentHtml, defaultOpen) {
+    if (!contentHtml || contentHtml.trim() === '') return '';
+    return `<div class="section${defaultOpen ? ' open' : ''}" id="sec-${id}">
+        <div class="section-header" onclick="this.parentElement.classList.toggle('open')">
+            ${title} <span class="arrow">▶</span>
+        </div>
+        <div class="section-body">${contentHtml}</div>
+    </div>`;
+}
+
+function severityTag(s) {
+    if (!s) return '';
+    const cls = s === 'severe' ? 'tag-danger' : s === 'moderate' ? 'tag-warn' : 'tag';
+    return `<span class="tag ${cls}">${SEVERITY_MAP[s] || s}</span>`;
+}
+
+function renderPatient(p) {
+    // Header
+    document.getElementById('patientHeader').innerHTML = `
+        <div class="name">${p.last_name} ${p.first_name}</div>
+        <div class="meta">@${p.username} · ${GENDER_MAP[p.gender] || p.gender} · ${calcAge(p.date_of_birth)} tuổi · ID: ${p.patient_id.substring(0,12)}...</div>
+        <div class="badges">
+            <span class="badge">${p.preferred_language === 'vi' ? '🇻🇳 Tiếng Việt' : '🇬🇧 English'}</span>
+            ${p.onboarding_status === 'completed' ? '<span class="badge badge-status">Đã onboard</span>' : '<span class="badge">Đang onboard</span>'}
+            ${p.phone ? '<span class="badge">📞 ' + p.phone + '</span>' : ''}
+        </div>
+    `;
+
+    let body = '';
+
+    // Personal info
+    body += section('personal', '👤 Thông tin cá nhân (Personal Info)', `
+        ${row('Họ tên (Name)', p.last_name + ' ' + p.first_name)}
+        ${row('Ngày sinh (DOB)', p.date_of_birth)}
+        ${row('Giới tính (Gender)', GENDER_MAP[p.gender] || p.gender)}
+        ${row('Điện thoại (Phone)', p.phone)}
+        ${row('Email', p.email)}
+        ${row('Ngôn ngữ (Language)', p.preferred_language === 'vi' ? 'Tiếng Việt' : 'English')}
+    `, true);
+
+    // Vital signs
+    if (p.vital_signs) {
+        const v = p.vital_signs;
+        body += section('vitals', '❤️ Sinh hiệu (Vital Signs)', `
+            ${row('Chiều cao (Height)', v.height_cm ? v.height_cm + ' cm' : null)}
+            ${row('Cân nặng (Weight)', v.weight_kg ? v.weight_kg + ' kg' : null)}
+            ${row('BMI', v.bmi)}
+            ${row('Huyết áp (BP)', v.bp_systolic ? v.bp_systolic + '/' + v.bp_diastolic + ' mmHg' : null)}
+            ${row('Nhịp tim (HR)', v.heart_rate ? v.heart_rate + ' bpm' : null)}
+            ${row('SpO2', v.spo2 ? v.spo2 + '%' : null)}
+            ${row('Nhiệt độ (Temp)', v.temperature_c ? v.temperature_c + '°C' : null)}
+        `, true);
+    }
+
+    // Medical conditions
+    if (p.medical_conditions.length) {
+        let html = '';
+        p.medical_conditions.forEach(c => {
+            html += `<div class="info-row">
+                <span class="info-label">${c.condition_name}</span>
+                <span class="info-value">${severityTag(c.severity)} ${c.status === 'active' ? '🔴' : '🟢'} ${c.diagnosed_year ? '(' + c.diagnosed_year + ')' : ''}</span>
+            </div>`;
+        });
+        body += section('conditions', '🏥 Bệnh lý (Medical Conditions)', html, true);
+    }
+
+    // Medications
+    if (p.medications.length) {
+        let html = '';
+        p.medications.forEach(m => {
+            html += `<div class="info-row">
+                <span class="info-label">${m.drug_name}</span>
+                <span class="info-value">${[m.dosage, m.frequency].filter(Boolean).join(' · ')}</span>
+            </div>`;
+        });
+        body += section('meds', '💊 Thuốc đang dùng (Medications)', html, false);
+    }
+
+    // Allergies
+    if (p.allergies.length) {
+        let html = '<div class="tag-list">';
+        p.allergies.forEach(a => {
+            const cls = a.severity === 'severe' ? 'tag-danger' : a.severity === 'moderate' ? 'tag-warn' : 'tag';
+            html += `<span class="tag ${cls}">${a.allergen} (${a.allergy_type})</span>`;
+        });
+        html += '</div>';
+        body += section('allergies', '⚠️ Dị ứng (Allergies)', html, true);
+    }
+
+    // Surgeries
+    if (p.surgeries.length) {
+        let html = '';
+        p.surgeries.forEach(s => {
+            html += `<div class="info-row">
+                <span class="info-label">${s.procedure_name}</span>
+                <span class="info-value">${[s.surgery_year, s.hospital].filter(Boolean).join(' · ')}</span>
+            </div>`;
+        });
+        body += section('surgeries', '🔪 Phẫu thuật (Surgeries)', html, false);
+    }
+
+    // Family history
+    if (p.family_histories.length) {
+        let html = '';
+        p.family_histories.forEach(f => {
+            html += `<div class="info-row">
+                <span class="info-label">${f.condition}</span>
+                <span class="info-value">${f.relation}${f.age_of_onset ? ' (' + f.age_of_onset + ' tuổi)' : ''}${f.is_deceased ? ' ✝' : ''}</span>
+            </div>`;
+        });
+        body += section('family', '👨‍👩‍👧 Tiền sử gia đình (Family History)', html, false);
+    }
+
+    // Social history
+    if (p.social_history) {
+        const sh = p.social_history;
+        body += section('social', '🏠 Xã hội (Social History)', `
+            ${row('Nghề nghiệp (Occupation)', sh.occupation)}
+            ${row('Môi trường làm việc (Work env)', sh.work_environment)}
+            ${row('Hút thuốc (Smoking)', SMOKING_MAP[sh.smoking_status] || sh.smoking_status)}
+            ${row('Rượu bia (Alcohol)', ALCOHOL_MAP[sh.alcohol_status] || sh.alcohol_status)}
+            ${row('Chất kích thích (Substance)', sh.substance_use ? 'Có' : 'Không')}
+        `, false);
+    }
+
+    // Lifestyle
+    if (p.lifestyle) {
+        const ls = p.lifestyle;
+        let html = '';
+        if (ls.nutrition) {
+            html += '<div style="font-size:11px;font-weight:600;color:#00897b;margin:6px 0 2px;">Dinh dưỡng (Nutrition)</div>';
+            html += row('Bữa/ngày', ls.nutrition.meals_per_day);
+            html += row('Rau hàng ngày', ls.nutrition.vegetables_daily ? 'Có' : 'Không');
+        }
+        if (ls.exercise) {
+            html += '<div style="font-size:11px;font-weight:600;color:#00897b;margin:6px 0 2px;">Vận động (Exercise)</div>';
+            html += row('Phút/tuần', ls.exercise.exercise_minutes_per_week);
+            html += row('Đi bộ hàng ngày', ls.exercise.walking_daily ? 'Có' : 'Không');
+        }
+        if (ls.sleep) {
+            html += '<div style="font-size:11px;font-weight:600;color:#00897b;margin:6px 0 2px;">Giấc ngủ (Sleep)</div>';
+            html += row('Giờ/đêm', ls.sleep.hours_per_night);
+            html += row('Chất lượng', ls.sleep.quality);
+        }
+        if (ls.mental_health) {
+            html += '<div style="font-size:11px;font-weight:600;color:#00897b;margin:6px 0 2px;">Tâm lý (Mental Health)</div>';
+            html += row('Mức stress', ls.mental_health.stress_level ? ls.mental_health.stress_level + '/10' : null);
+            html += row('Tâm trạng', ls.mental_health.mood);
+        }
+        if (html) body += section('lifestyle', '🌿 Lối sống (Lifestyle)', html, false);
+    }
+
+    // Vaccinations
+    if (p.vaccinations.length) {
+        let html = '';
+        p.vaccinations.forEach(v => {
+            html += `<div class="info-row">
+                <span class="info-label">${v.vaccine_name}</span>
+                <span class="info-value">${v.dose_number ? 'Liều ' + v.dose_number : ''} ${v.date_administered || ''}</span>
+            </div>`;
+        });
+        body += section('vaccines', '💉 Tiêm chủng (Vaccinations)', html, false);
+    }
+
+    // Screenings
+    if (p.screenings.length) {
+        let html = '';
+        p.screenings.forEach(s => {
+            html += `<div class="info-row">
+                <span class="info-label">${s.screening_type}</span>
+                <span class="info-value">${s.result || 'N/A'} ${s.screening_date || ''}</span>
+            </div>`;
+        });
+        body += section('screenings', '🔍 Tầm soát (Screenings)', html, false);
+    }
+
+    if (!body) body = '<div style="padding:20px;" class="empty-note">Chưa có dữ liệu</div>';
+
+    document.getElementById('patientBody').innerHTML = body;
+    document.getElementById('loadingPanel').style.display = 'none';
+    document.getElementById('patientPanel').style.display = 'flex';
+}
+
+// ── Init ──
+(async function init() {
+    const username = getUsername();
+    if (!username) {
+        window.location.href = '/login';
+        return;
+    }
+
+    document.getElementById('navUser').textContent = '@' + username;
+
+    try {
+        const res = await fetch('/api/v1/patients/' + encodeURIComponent(username));
+        if (res.ok) {
+            const data = await res.json();
+            renderPatient(data);
+        } else if (res.status === 404) {
+            document.getElementById('loadingPanel').innerHTML = '<div style="color:#c62828;">Không tìm thấy bệnh nhân "' + username + '"</div>';
+        } else {
+            document.getElementById('loadingPanel').innerHTML = '<div style="color:#c62828;">Lỗi tải dữ liệu</div>';
+        }
+    } catch (err) {
+        document.getElementById('loadingPanel').innerHTML = '<div style="color:#c62828;">Lỗi kết nối: ' + err.message + '</div>';
+    }
+})();
+</script>
+</body>
+</html>

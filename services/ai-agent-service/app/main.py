@@ -119,6 +119,18 @@ async def patient_register_ui():
     return (STATIC_DIR / "patient-register.html").read_text(encoding="utf-8")
 
 
+@app.get("/login", response_class=HTMLResponse)
+async def login_ui():
+    """Serve the login page."""
+    return (STATIC_DIR / "login.html").read_text(encoding="utf-8")
+
+
+@app.get("/patient-dashboard", response_class=HTMLResponse)
+async def patient_dashboard_ui():
+    """Serve the patient dashboard (profile + chat)."""
+    return (STATIC_DIR / "patient-dashboard.html").read_text(encoding="utf-8")
+
+
 # Import and register routers after app creation to avoid circular imports
 from app.api.v1.routes import chat, flow, logs, patients, voice_ws  # noqa: E402
 

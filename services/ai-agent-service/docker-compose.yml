@@ -47,6 +47,7 @@ services:
     restart: unless-stopped
     command:
       - "http"
+      - "--url=${NGROK_DOMAIN}"
       - "ai-agent:${SERVICE_PORT:-8008}"
     environment:
       - NGROK_AUTHTOKEN=${NGROK_AUTHTOKEN}
