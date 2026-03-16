@@ -198,10 +198,10 @@ def _emergency_response_v2(state: CareFlowState) -> dict:
         "c\u1ea7n \u0111\u01b0\u1ee3c \u0111\u00e1nh gi\u00e1 y t\u1ebf NGAY L\u1eacP T\u1ee8C.\n\n"
         "\u26a0\ufe0f EMERGENCY ALERT:\n\n"
         "Based on your symptoms, you need IMMEDIATE medical evaluation.\n\n"
-        "\ud83d\udcde G\u1ecdi 115 (Vi\u1ec7t Nam) ho\u1eb7c 911 (M\u1ef9) NGAY\n"
-        "\ud83d\udcde Call 115 (Vietnam) or 911 (US) NOW\n\n"
-        "\ud83c\udfe5 Ho\u1eb7c \u0111\u1ebfn ph\u00f2ng c\u1ea5p c\u1ee9u g\u1ea7n nh\u1ea5t\n"
-        "\ud83c\udfe5 Or go to the nearest emergency room"
+        "\U0001F4DE G\u1ecdi 115 (Vi\u1ec7t Nam) ho\u1eb7c 911 (M\u1ef9) NGAY\n"
+        "\U0001F4DE Call 115 (Vietnam) or 911 (US) NOW\n\n"
+        "\U0001F3E5 Ho\u1eb7c \u0111\u1ebfn ph\u00f2ng c\u1ea5p c\u1ee9u g\u1ea7n nh\u1ea5t\n"
+        "\U0001F3E5 Or go to the nearest emergency room"
     )
 
     return {

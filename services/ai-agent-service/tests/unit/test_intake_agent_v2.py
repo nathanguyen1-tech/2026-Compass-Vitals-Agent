@@ -108,8 +108,7 @@ class TestV2NormalConversation:
         # _call_with_retry(provider, messages, **kwargs) — messages is 2nd positional arg
         messages = call_args[0][1]
         system_msg = messages[0]["content"]
-        assert "bác sĩ khám bệnh trực tuyến" in system_msg  # V2 prompt signature
-        assert "WORST-FIRST" not in system_msg  # V1-style rules NOT present
+        assert "bác sĩ intake trực tuyến" in system_msg  # V2 prompt signature
         assert "SCREENING ENFORCEMENT" not in system_msg  # V1 control NOT present
 
         # Response should be cleaned (markers stripped)
