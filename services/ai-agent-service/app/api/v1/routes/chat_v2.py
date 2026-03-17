@@ -4,6 +4,7 @@ Connects patient messages to Intake Agent V2 (trust-LLM architecture).
 Runs alongside V1 (/api/v1/chat) for A/B comparison.
 """
 
+import asyncio
 import uuid
 from datetime import datetime, timezone
 
@@ -16,6 +17,7 @@ from app.api.v1.schemas.chat import ChatRequest, ChatResponse
 from app.config import settings
 from app.domain.services.llm_gateway import LLMGateway
 from app.domain.services.phi_deidentifier import PHIDeidentifier
+from app.domain.services.session_persistence import load_session, persist_session
 
 logger = structlog.get_logger()
 router = APIRouter()
@@ -43,6 +45,10 @@ async def chat_v2(request: ChatRequest):
     session_id = request.session_id or str(uuid.uuid4())
     session = _sessions_v2.get(session_id)
 
+    # If session_id was provided but not in memory, try DB restore
+    if session is None and request.session_id:
+        session = await load_session(session_id)
+
     is_new_session = False
     if session is None:
         is_new_session = True
@@ -64,6 +70,7 @@ async def chat_v2(request: ChatRequest):
             "updated_at": datetime.now(timezone.utc).isoformat(),
         }
         _sessions_v2[session_id] = session
+        asyncio.create_task(persist_session(session_id, session))
 
     # New session with empty message → greeting
     if is_new_session and (not request.message or not request.message.strip()):
@@ -148,6 +155,9 @@ async def chat_v2(request: ChatRequest):
     if new_messages:
         last_msg = new_messages[-1]
         ai_response = last_msg.content if hasattr(last_msg, "content") else str(last_msg)
+
+    session["updated_at"] = datetime.now(timezone.utc).isoformat()
+    asyncio.create_task(persist_session(session_id, session))
 
     logger.info(
         "chat_v2.processed",

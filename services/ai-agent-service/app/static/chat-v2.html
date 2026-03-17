@@ -154,6 +154,7 @@
         <a href="/soap-note" id="navSoapNote">SOAP Note</a>
         <a href="/care-plan" id="navCarePlan">Care Plan</a>
         <a href="/logs">Logs</a>
+        <a href="/history">History</a>
     </div>
 
     <div class="header">
@@ -193,6 +194,7 @@
         <span id="sessionInfo">Session: ch&#432;a k&#7871;t n&#7889;i</span>
         <span>
             <a href="/dashboard" id="dashboardLink" style="display:none">Xem Dashboard</a>
+            <button id="copyLinkBtn" onclick="copySessionLink()" style="display:none">&#128279; Copy Link</button>
             <button onclick="resetSession()">Phi&#234;n m&#7899;i</button>
         </span>
     </div>
@@ -315,6 +317,7 @@
                 const data = await res.json();
                 sessionId = data.session_id;
                 sessionInfo.textContent = `Session: ${sessionId.substring(0, 8)}...`;
+                document.getElementById('copyLinkBtn').style.display = 'inline';
                 updateNavLinks();
                 messageCount++;
                 addMessage(data.response, 'bot', {
@@ -374,9 +377,66 @@
             if (welcomeEl) welcomeEl.style.display = 'block';
             actionBar.classList.remove('show');
             dashboardLink.style.display = 'none';
+            document.getElementById('copyLinkBtn').style.display = 'none';
             analyzeBtn.disabled = false;
             analyzeBtn.textContent = '\u25B6 Ph\u00E2n t\u00EDch & L\u1EADp k\u1EBF ho\u1EA1ch';
+            // Remove session from URL without reload
+            const url = new URL(window.location);
+            url.searchParams.delete('session');
+            window.history.replaceState({}, '', url);
         }
+
+        function copySessionLink() {
+            const url = `${window.location.origin}/chat-v2?session=${sessionId}`;
+            navigator.clipboard.writeText(url).then(() => {
+                const btn = document.getElementById('copyLinkBtn');
+                const orig = btn.textContent;
+                btn.textContent = '\u2713 Copied!';
+                setTimeout(() => btn.textContent = orig, 2000);
+            });
+        }
+
+        // On load: restore session from URL param (?session=<id>)
+        (async function() {
+            const params = new URLSearchParams(window.location.search);
+            const urlSession = params.get('session');
+            if (!urlSession) return;
+
+            sessionId = urlSession;
+            sessionInfo.textContent = 'Session: ' + urlSession.substring(0, 8) + '...';
+            document.getElementById('copyLinkBtn').style.display = 'inline';
+            updateNavLinks();
+            actionBar.classList.add('show');
+
+            // Fetch và render lại lịch sử chat từ DB
+            try {
+                const res = await fetch(`/api/v1/sessions/${urlSession}/messages`);
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                const data = await res.json();
+                const messages = data.messages || [];
+
+                if (messages.length === 0) {
+                    addSystemMessage('Phiên trống — chưa có tin nhắn nào.');
+                    return;
+                }
+
+                if (welcomeEl) welcomeEl.style.display = 'none';
+
+                messages.forEach(m => {
+                    if (m.type === 'human') {
+                        addMessage(m.content, 'user');
+                        messageCount++;
+                    } else if (m.type === 'ai' || m.type === 'AIMessage') {
+                        addMessage(m.content, 'bot', { agent_state: 'intake_v2' });
+                    }
+                });
+
+                addSystemMessage('Đã tải ' + messages.length + ' tin nhắn — phiên: ' + urlSession.substring(0, 8) + '...');
+                scrollToBottom();
+            } catch (err) {
+                addSystemMessage('Không thể tải lịch sử: ' + err.message);
+            }
+        })();
 
         messageInput.focus();
 

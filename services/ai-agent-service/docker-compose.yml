@@ -45,6 +45,7 @@ services:
     command:
       - "http"
       - "ai-agent:8001"
+      - "--domain=sleepless-unaffiliated-regena.ngrok-free.dev"
     environment:
       - NGROK_AUTHTOKEN=${NGROK_AUTHTOKEN}
     ports:

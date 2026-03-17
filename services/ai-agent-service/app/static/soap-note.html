@@ -81,6 +81,7 @@
         <a href="/soap-note" class="active">SOAP Note</a>
         <a href="/care-plan">Care Plan</a>
         <a href="/logs">Logs</a>
+        <a href="/history">History</a>
     </div>
 
     <div class="header">
@@ -177,6 +178,7 @@
             <div class="print-bar">
                 <button class="btn btn-outline" onclick="toggleVietnamese()">&#127468;&#127475; Toggle Ti&#7871;ng Vi&#7879;t</button>
                 <button class="btn btn-outline" onclick="window.print()">&#128424; In SOAP Note</button>
+                <button class="btn btn-outline" id="copySOAPBtn" onclick="copySOAPLink()" style="display:none">&#128279; Copy Link</button>
             </div>
         </div>
     </div>
@@ -196,7 +198,18 @@
                     a.href = `/?session=${sessionId}`;
                 }
             });
+            document.getElementById('copySOAPBtn').style.display = 'inline';
             loadSOAP();
+        }
+
+        function copySOAPLink() {
+            const url = `${window.location.origin}/soap-note?session=${sessionId}`;
+            navigator.clipboard.writeText(url).then(() => {
+                const btn = document.getElementById('copySOAPBtn');
+                const orig = btn.textContent;
+                btn.textContent = '\u2713 Copied!';
+                setTimeout(() => btn.textContent = orig, 2000);
+            });
         }
 
         function toggleVietnamese() {
