@@ -81,13 +81,22 @@
 
         /* Toast */
         .toast {
-            position: fixed; bottom: 24px; right: 24px;
-            background: #263238; color: white;
-            padding: 10px 18px; border-radius: 8px;
-            font-size: 13px; opacity: 0; transition: opacity 0.3s;
-            pointer-events: none;
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            display: flex; align-items: center; justify-content: center;
+            background: rgba(0,0,0,0.35);
+            opacity: 0; transition: opacity 0.25s;
+            pointer-events: none; z-index: 9999;
         }
         .toast.show { opacity: 1; }
+        .toast-inner {
+            background: #fff; border-radius: 14px;
+            padding: 28px 40px; text-align: center;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+            transform: scale(0.9); transition: transform 0.25s;
+        }
+        .toast.show .toast-inner { transform: scale(1); }
+        .toast-icon { font-size: 40px; margin-bottom: 10px; }
+        .toast-msg { font-size: 16px; font-weight: 600; color: #263238; }
     </style>
 </head>
 <body>
@@ -145,7 +154,12 @@
         </div>
     </div>
 
-    <div class="toast" id="toast">Link đã copy!</div>
+    <div class="toast" id="toast">
+        <div class="toast-inner">
+            <div class="toast-icon">✅</div>
+            <div class="toast-msg" id="toastMsg">Link đã copy!</div>
+        </div>
+    </div>
 
     <script>
         const severityClass = {
@@ -169,9 +183,9 @@
 
         function showToast(msg) {
             const t = document.getElementById('toast');
-            t.textContent = msg;
+            document.getElementById('toastMsg').textContent = msg;
             t.classList.add('show');
-            setTimeout(() => t.classList.remove('show'), 2500);
+            setTimeout(() => t.classList.remove('show'), 2000);
         }
 
         function copyLink(url) {
