@@ -91,8 +91,15 @@ async def intake_node_v2(
         )
         cultural_context = f"\n\nCULTURAL CONTEXT DETECTED: {expr_info}"
 
+    current_year = datetime.now(timezone.utc).year
+    year_context = (
+        f"\n\nCURRENT YEAR: {current_year}. "
+        f"When a patient states their birth year (e.g., 'sinh năm 1958'), "
+        f"calculate age as {current_year} minus birth year. "
+        f"Do NOT use any other year for this calculation."
+    )
     llm_messages = [
-        {"role": "system", "content": INTAKE_V2_SYSTEM_PROMPT + cultural_context},
+        {"role": "system", "content": INTAKE_V2_SYSTEM_PROMPT + cultural_context + year_context},
     ]
 
     # Add full conversation history (de-identified, markers stripped from user msgs)

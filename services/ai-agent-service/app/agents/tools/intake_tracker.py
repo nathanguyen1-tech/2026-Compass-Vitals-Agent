@@ -9,6 +9,7 @@ from __future__ import annotations
 import math
 import re
 from copy import deepcopy
+from datetime import datetime, timezone
 
 
 # Valid intake phases in order
@@ -289,7 +290,14 @@ class IntakeTracker:
         # Demographics
         if field == "age":
             if value and value.strip():
-                self.age = value.strip()
+                raw = value.strip()
+                # Server-side fix: if LLM passes a birth year (4-digit, 1900–2020)
+                # instead of an age, compute the correct age using the actual current year.
+                birth_year_match = re.fullmatch(r"(19\d{2}|20[01]\d|2020)", raw)
+                if birth_year_match:
+                    current_year = datetime.now(timezone.utc).year
+                    raw = str(current_year - int(birth_year_match.group(1)))
+                self.age = raw
             return
 
         if field == "gender":
