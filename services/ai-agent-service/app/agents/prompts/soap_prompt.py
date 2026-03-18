@@ -39,28 +39,25 @@ FORMATTING RULES (CRITICAL — applies to ALL sections, both English and Vietnam
 
 SECTION GUIDELINES:
 
-S (Subjective) — use these sub-headers, each on its own line:
-  Chief Complaint:
-  HPI:
-  ROS:
-  PMH:
-  Surgical History:
-  Medications:
-  Allergies:
-  Social History:
-  Family History:
-  Cultural Notes:
+S (Subjective) — present as individual bullet lines, NO OLDCARTS sub-headers, NO separate ROS sub-section.
+  Write each piece of information as its own "- " bullet line in natural clinical order.
+  Suggested line order (include only what's available):
+  - Chief complaint (in patient's own words)
+  - Age, sex, and reason for visit (if useful context)
+  - History of present illness: onset, location, character, severity, duration,
+    timing, aggravating/alleviating factors — weave into 1–3 concise bullet lines
+  - Associated symptoms (relevant positives/negatives, inline — do NOT create a separate ROS block)
+  - Past medical history
+  - Surgical history
+  - Current medications (with dosages)
+  - Allergies (drug and environmental)
+  - Social history, family history (if available)
+  - Cultural health expressions used by patient (note original Vietnamese terms if present)
 Content guidance:
-- Chief complaint in patient's own words
-- HPI using OLDCARTS framework: Onset, Location, Duration, \
-Character, Aggravating/Alleviating factors, Radiation, Timing, Severity
-- ROS — positives and pertinent negatives
-- PMH, Surgical History as bullet lists if multiple items
-- Medications with dosages as bullet list
-- Allergies (drug and environmental)
-- Social History, Family History (if available)
-- Cultural health expressions used by patient (note original Vietnamese terms if present)
-- Omit sub-headers that have no data
+- Do NOT use OLDCARTS as explicit sub-headers or label lines "Onset:", "Location:", etc.
+- Do NOT create a standalone "ROS:" block — fold pertinent positives/negatives into the HPI lines
+- Each bullet line should be concise and clinically clear
+- Omit lines that have no available data
 
 O (Objective) — use these sub-headers:
   Vital Signs:
