@@ -24,7 +24,7 @@ class Settings(BaseSettings):
     # LLM
     openai_api_key: str = ""
     anthropic_api_key: str = ""
-    primary_llm_model: str = "gpt-4"
+    primary_llm_model: str = "gpt-4o"
     backup_llm_model: str = ""
     screening_llm_model: str = "gpt-4o-mini"
     llm_max_retries: int = 3

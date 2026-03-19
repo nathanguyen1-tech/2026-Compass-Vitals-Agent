@@ -22,14 +22,10 @@ logger = structlog.get_logger()
 async def lifespan(app: FastAPI):
     """Startup/shutdown lifecycle."""
     logger.info("startup", service=settings.service_name, env=settings.environment)
-<<<<<<< HEAD
     # Verify DB connection on startup
     async with async_engine.connect() as conn:
         await conn.execute(sa.text("SELECT 1"))
     logger.info("database_connected", url=settings.database_url.split("@")[-1])
-    yield
-    await async_engine.dispose()
-=======
 
     # Create DB tables (idempotent — safe to run on every startup)
     try:
@@ -45,14 +41,12 @@ async def lifespan(app: FastAPI):
 
     yield
 
-    # Dispose engine on shutdown
+    await async_engine.dispose()
     try:
         from app.db.engine import engine as _engine
         await _engine.dispose()
     except Exception:
         pass
-
->>>>>>> ubutu-intake-soap-v1
     logger.info("shutdown", service=settings.service_name)
 
 
@@ -168,8 +162,6 @@ async def patient_dashboard_ui():
     return (STATIC_DIR / "patient-dashboard.html").read_text(encoding="utf-8")
 
 
-# Import and register routers after app creation to avoid circular imports
-from app.api.v1.routes import chat, flow, logs, patients, voice_ws  # noqa: E402
 @app.get("/history", response_class=HTMLResponse)
 async def history_ui():
     """Serve the session history page."""
@@ -183,7 +175,7 @@ async def chat_v2_ui():
 
 
 # Import and register routers after app creation to avoid circular imports
-from app.api.v1.routes import chat, chat_v2, flow, logs, sessions, voice_ws  # noqa: E402
+from app.api.v1.routes import chat, chat_v2, flow, logs, patients, sessions, voice_ws  # noqa: E402
 
 app.include_router(chat.router, prefix="/api/v1", tags=["chat"])
 app.include_router(chat_v2.router, prefix="/api/v1", tags=["chat-v2"])
