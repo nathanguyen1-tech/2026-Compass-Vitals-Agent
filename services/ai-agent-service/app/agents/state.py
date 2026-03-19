@@ -59,6 +59,7 @@ class CareFlowState(TypedDict):
     # === Intake Tracking ===
     intake_tracker: dict | None  # IntakeTracker serialized state
     existing_history: dict | None  # Pre-existing patient data (PMH, meds, etc.)
+    differential_tracker: dict | None  # V3: DifferentialTracker serialized state
 
     # === Internal Flow Control ===
     _critic_loops: int  # Track Critic → Proposer loop iterations
