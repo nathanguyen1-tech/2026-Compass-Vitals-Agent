@@ -53,12 +53,12 @@ Priority order (highest to lowest):
      e.g., onset="hôm qua" → probe "Đột ngột hay từ từ tăng dần?"
      e.g., character="đau" → probe "Đau như thế nào — nhói, âm ỉ, co thắt?"
      e.g., location="bụng" → probe "Cụ thể vùng nào — trên rốn, dưới rốn, bên phải, bên trái?"
-  3. COMPLAINT-SPECIFIC DEEP PROBING (required before moving to PMH):
-     Abdominal pain: fever? nausea/vomiting? bowel changes? last menstrual period (female)?
-                     appetite loss? similar episode before? urinary symptoms?
-     Chest pain: radiation to arm/jaw? dyspnea? diaphoresis? palpitations? exertional?
-     Headache: worst ever? visual changes? neck stiffness? photophobia? focal neuro symptoms?
-     Respiratory: cough (productive?)? fever? contact sick? travel? hemoptysis?
+  3. COMPLAINT-SPECIFIC DEEP PROBING — one sub-symptom at a time:
+     BEFORE asking about a sub-symptom, CHECK known_facts to see if already answered.
+     Only ask what is STILL NULL in known_facts. Never re-ask a field already "sufficient".
+     Abdominal: fever→nausea→bowel→urinary→lmp(female) — each is a SEPARATE field, ask one at a time
+     Chest: dyspnea→palpitations→diaphoresis→radiation — each separate
+     Headache: photophobia→neck stiffness→visual changes→focal neuro — each separate
   4. UNANSWERED REQUIRED: field with quality "partial", "vague", or "skipped" (skip_count < 2)
   5. HIGHEST YIELD: field that would most change differential probabilities
   6. HISTORY: pmh, medications, allergies ONLY after all HPI + associated symptoms probed
@@ -69,24 +69,24 @@ Skip persistence rules:
   - skip_count ≥ 3 → mark "declined", move on
 
 ════════════════════════════════════════════════
-ASSOCIATED SYMPTOMS — MANDATORY PROBING
+ASSOCIATED SYMPTOMS — MANDATORY BUT GRANULAR
 ════════════════════════════════════════════════
-NEVER mark intake_complete without probing complaint-relevant associated symptoms.
-These are NOT optional — they are required for a complete clinical picture:
+Each associated symptom is an INDEPENDENT field with its own skip_count.
+BEFORE asking, check known_facts for each field individually.
+NEVER re-ask a field that already has a value in known_facts.
 
-For ANY chief complaint:
-  - Fever / chills
-  - Nausea / vomiting
-  - Appetite / weight changes (if chronic)
-  - Sleep disruption
+Fields to probe (check known_facts before each):
+  "fever"        → "Bạn có bị sốt không?"
+  "nausea"       → "Có buồn nôn hoặc nôn không?"
+  "bowel"        → "Việc đi đại tiện có thay đổi không?"
+  "urinary"      → "Tiểu tiện có gì bất thường không?"
+  "lmp"          → "Kinh nguyệt gần nhất của bạn khi nào?" (female only)
+  "dyspnea"      → "Có khó thở không?" (chest/respiratory)
+  "palpitations" → "Có hồi hộp, tim đập nhanh không?" (chest)
 
-Complaint-specific (MUST probe these before declaring complete):
-  Abdominal:   fever, nausea, vomiting, bowel habit change, urinary symptoms, LMP (female)
-  Chest:       dyspnea, palpitations, diaphoresis, radiation, edema
-  Headache:    visual aura, neck stiffness, photophobia, nausea, focal weakness
-  Respiratory: cough type, fever, hemoptysis, dyspnea at rest vs exertion
-  Urinary:     dysuria, frequency, hematuria, fever, flank pain
-  General:     fatigue, fever, weight loss (red flag triad)
+RULE: If known_facts.fever has a value → SKIP "fever" question, move to next null field.
+      If known_facts.nausea has a value → SKIP "nausea" question, move to next null field.
+      Etc. for each field. ONE question per turn about ONE specific null field.
 
 ════════════════════════════════════════════════
 EMERGENCY SCORE (0-10, semantic — NOT keyword matching)
@@ -152,10 +152,13 @@ REQUIRED OUTPUT FORMAT (JSON only, no other text)
     "alleviating": "value or null",
     "timing": "value or null",
     "severity": "value or null — include 1-10 scale AND functional impact",
-    "associated_symptoms": "value or null — fever, nausea, vomiting, etc.",
-    "lmp": "value or null — last menstrual period (female patients only, ask once, accept 'đang kinh/vừa xong/2 tuần trước' as sufficient)",
-    "urinary": "value or null — urinary symptoms (accept 'bình thường' as sufficient if stated clearly)",
-    "bowel": "value or null — bowel changes (accept 'bình thường' as sufficient if stated clearly)",
+    "fever": "value or null — sốt (accept 'không sốt'/'bình thường' as sufficient)",
+    "nausea": "value or null — buồn nôn/nôn (accept 'không buồn nôn' as sufficient)",
+    "bowel": "value or null — đại tiện (accept 'bình thường' as sufficient)",
+    "urinary": "value or null — tiểu tiện (accept 'bình thường' as sufficient)",
+    "lmp": "value or null — kinh nguyệt gần nhất (female only; 'vừa xong'/'2 tuần trước' = sufficient; if skipped 2x mark declined)",
+    "dyspnea": "value or null — khó thở (chest/respiratory complaints only)",
+    "palpitations": "value or null — hồi hộp (chest complaints only)",
     "pmh": "value or null",
     "medications": "value or null",
     "allergies": "value or null",

@@ -66,12 +66,13 @@ medications   → Hỏi thuốc kê toa + OTC + thuốc bắc/nam
 allergies     → Hỏi dị ứng và phản ứng cụ thể
                Ví dụ: "Bạn có bị dị ứng với thuốc hoặc thức ăn gì không? Phản ứng ra sao?"
 
-associated_symptoms → Hỏi triệu chứng đi kèm liên quan đến chief complaint
-               Hỏi từng nhóm, không gộp quá nhiều:
-               - "Bạn có bị sốt, buồn nôn, hay nôn không?"
-               - "Việc đi đại tiện, tiểu tiện có gì thay đổi không?"  (nếu đau bụng)
-               - "Bạn có bị khó thở hay tim đập nhanh không?"  (nếu đau ngực)
-               - "Kinh nguyệt gần nhất của bạn khi nào?"  (nếu nữ + đau bụng dưới)
+fever         → "Bạn có bị sốt không? Nếu có, sốt mấy độ?"
+nausea        → "Bạn có bị buồn nôn hoặc nôn không?"
+bowel         → "Việc đi đại tiện của bạn có thay đổi không — tiêu chảy, táo bón, hay ra máu?"
+urinary       → "Bạn có triệu chứng gì về tiểu tiện không — tiểu buốt, tiểu rắt, hay đau?"
+lmp           → "Kinh nguyệt gần nhất của bạn khi nào?"
+dyspnea       → "Bạn có cảm thấy khó thở không — kể cả khi nghỉ ngơi?"
+palpitations  → "Tim bạn có đập nhanh hoặc cảm giác hồi hộp không?"
 
 age_gender    → Hỏi tự nhiên trong câu đầu
                Ví dụ: "Bạn năm nay bao nhiêu tuổi và giới tính là nam hay nữ?"

@@ -148,6 +148,58 @@ async def intake_node_v3(
     # === Step 7: Update DifferentialTracker from reasoner ===
     diff_tracker.update_from_reasoner(reasoner_output)
 
+    # === Step 7b: Safety-by-code answer extraction ===
+    # Do NOT trust LLM to classify "bình thường" answers — enforce in Python.
+    last_field = state.get("last_asked_field") or ""
+    _raw_user_text = last_message.content if hasattr(last_message, "content") else str(last_message)
+    user_lower = _raw_user_text.lower()
+
+    _NEGATIVE_PATTERNS = [
+        "bình thường", "không có", "không bị", "không sốt", "không buồn nôn",
+        "không nôn", "không tiêu chảy", "không táo bón", "không tiểu buốt",
+        "không khó thở", "không hồi hộp", "ổn hết", "bình thường hết",
+        "không gì hết", "không có gì", "không thấy gì", "không biết",
+        "không liên quan", "không theo thời gian", "không rõ",
+    ]
+    # Fields where a negative/normal answer from patient = clinically sufficient
+    _NEGATIVE_SUFFICIENT_FIELDS = {
+        "fever", "nausea", "bowel", "urinary", "dyspnea", "palpitations",
+        "timing", "alleviating", "aggravating",  # OLDCARTS: "không có" is valid
+    }
+
+    if last_field in _NEGATIVE_SUFFICIENT_FIELDS:
+        patient_said_normal = any(p in user_lower for p in _NEGATIVE_PATTERNS)
+        if patient_said_normal:
+            if "answer_quality" not in reasoner_output:
+                reasoner_output["answer_quality"] = {}
+            if reasoner_output["answer_quality"].get(last_field) in (None, "vague", "partial", "skipped"):
+                reasoner_output["answer_quality"][last_field] = "sufficient"
+            if "known_facts" not in reasoner_output:
+                reasoner_output["known_facts"] = {}
+            if not reasoner_output["known_facts"].get(last_field):
+                reasoner_output["known_facts"][last_field] = "patient reported none/normal"
+            diff_tracker.update_from_reasoner(reasoner_output)
+            logger.info("intake_v3.forced_sufficient", field=last_field, user_text=_raw_user_text[:80], case_id=case_id)
+
+    # Safety-by-code: extract PMH/medications/allergies from patient text directly
+    # Don't wait for Reasoner to pick them up — scan the message ourselves
+    _pmh_negatives    = ["không có bệnh nền", "không bệnh nền", "không bệnh gì", "khỏe mạnh", "no medical history", "không có tiền sử"]
+    _meds_negatives   = ["không dùng thuốc", "không uống thuốc", "không có thuốc", "no medication", "không thuốc"]
+    _allergy_negatives= ["không dị ứng", "không có dị ứng", "no allergy", "no allergies"]
+
+    _kf = reasoner_output.setdefault("known_facts", {})
+    _aq = reasoner_output.setdefault("answer_quality", {})
+    forced_fields = []
+    if not _kf.get("pmh") and any(p in user_lower for p in _pmh_negatives):
+        _kf["pmh"] = "none reported"; _aq["pmh"] = "sufficient"; forced_fields.append("pmh")
+    if not _kf.get("medications") and any(p in user_lower for p in _meds_negatives):
+        _kf["medications"] = "none"; _aq["medications"] = "sufficient"; forced_fields.append("medications")
+    if not _kf.get("allergies") and any(p in user_lower for p in _allergy_negatives):
+        _kf["allergies"] = "none"; _aq["allergies"] = "sufficient"; forced_fields.append("allergies")
+    if forced_fields:
+        diff_tracker.update_from_reasoner(reasoner_output)
+        logger.info("intake_v3.forced_pmh_extract", fields=forced_fields, case_id=case_id)
+
     # === Step 8: Semantic emergency check — two-tier ===
     # Extract next_target early (needed for urgent override below)
     next_target = reasoner_output.get("next_question_target", "cc")
