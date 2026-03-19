@@ -148,19 +148,40 @@ async def intake_node_v3(
         )
         return _emergency_response_v3(state, reason=diff_tracker.emergency_reasoning, critical=True)
     elif score >= EMERGENCY_SCORE_URGENT:
-        # Needs care today — flag but continue intake (NOT 115/911)
+        # Score 7-8: needs care today (NOT 115/911)
         logger.info(
             "intake_v3.urgent_flag",
             case_id=case_id,
             score=score,
             reasoning=diff_tracker.emergency_reasoning,
         )
-        # Override EMERGENCY_ESCALATION target → conversationalist would output 115 otherwise
         if next_target == "EMERGENCY_ESCALATION":
-            next_target = diff_tracker.field_statuses and \
-                next((f for f, s in diff_tracker.field_statuses.items()
-                      if s.quality not in ("sufficient", "declined")), None) or "pmh"
-            reason_for_target = "Urgent flag (score 7-8) — continue intake, advise seeing doctor today"
+            # Clinically correct: score 7-8 + Reasoner says escalate
+            # → we have enough data, complete intake and send advisory
+            logger.info(
+                "intake_v3.urgent_complete",
+                case_id=case_id,
+                reason="Score 7-8 with EMERGENCY_ESCALATION target — completing intake for urgent handoff",
+            )
+            _sync_tracker_from_reasoner(tracker, reasoner_output)
+            tracker.message_count += 1
+            intake_data = tracker.to_intake_data()
+            urgent_msg = (
+                "⚠️ Dựa trên những gì bạn mô tả, tôi khuyến nghị bạn nên **gặp bác sĩ trong ngày hôm nay** "
+                "— không cần gọi cấp cứu, nhưng nên được khám sớm.\n\n"
+                "Tôi đã ghi nhận đầy đủ thông tin của bạn và sẽ chuyển cho bác sĩ xem xét ngay."
+            )
+            return {
+                "messages": [AIMessage(content=urgent_msg)],
+                "detected_language": detected_language,
+                "cultural_expressions": state.get("cultural_expressions", []) + cultural_expressions,
+                "is_emergency": False,
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+                "intake_tracker": tracker.to_dict(),
+                "differential_tracker": diff_tracker.to_dict(),
+                "intake_data": intake_data,
+                "intake_complete": True,  # Hand off to Screening
+            }
 
     # === Step 9: Validate next target (code-enforced) ===
     skip_count = diff_tracker.get_skip_count(next_target)
