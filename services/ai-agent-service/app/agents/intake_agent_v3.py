@@ -246,123 +246,89 @@ async def intake_node_v3(
     if _pos_kf != reasoner_output.get("known_facts", {}):
         diff_tracker.update_from_reasoner(reasoner_output)
 
-    # === Step 8: Semantic emergency check — two-tier ===
-    # Extract next_target early (needed for urgent override below)
-    next_target = reasoner_output.get("next_question_target", "cc")
-
-    # Code-side guard: narrative_open only valid ONCE (when last_asked_field != "narrative_open")
-    # Use state as ground truth — if last turn asked narrative, it's done now
-    narrative_done_state = (
-        state.get("narrative_done", False)
-        or state.get("last_asked_field") == "narrative_open"
-        or reasoner_output.get("narrative_done", False)
-    )
-    if next_target == "narrative_open" and narrative_done_state:
-        logger.info("intake_v3.narrative_already_done", case_id=case_id)
-        next_target = _find_next_partial_or_oldcarts_target(tracker, diff_tracker, reasoner_output)
-        reasoner_output["next_question_target"] = next_target
-        reason_for_target = "Narrative done — targeted OLDCARTS/discriminating question"
-        reasoner_output["reason_for_target"] = reason_for_target
-    reason_for_target = reasoner_output.get("reason_for_target", "")
-
-    # Code-side: track skip when patient doesn't answer the asked field
-    _last_asked = state.get("last_asked_field") or ""
-    if _last_asked and _last_asked not in ("narrative_open", "cc", "unknown", ""):
-        _aq = reasoner_output.get("answer_quality", {})
-        _quality = _aq.get(_last_asked, "")
-        if _quality in ("skipped", "redirected", "vague", ""):
-            # Patient didn't properly answer last field — increment skip
-            diff_tracker.increment_skip(_last_asked)
-            logger.info("intake_v3.skip_incremented_code", field=_last_asked, quality=_quality, case_id=case_id)
-
+    # === Step 8: Emergency check (code-enforced) ===
     score = diff_tracker.emergency_score
     if score >= EMERGENCY_SCORE_CRITICAL:
-        # Life-threatening → 115/911 NOW
-        logger.warning(
-            "intake_v3.critical_emergency",
-            case_id=case_id,
-            score=score,
-            reasoning=diff_tracker.emergency_reasoning,
-        )
+        logger.warning("intake_v3.critical_emergency", case_id=case_id, score=score)
         return _emergency_response_v3(state, reason=diff_tracker.emergency_reasoning, critical=True)
     elif score >= EMERGENCY_SCORE_URGENT:
-        # Score 7-8: needs care today (NOT 115/911)
-        logger.info(
-            "intake_v3.urgent_flag",
-            case_id=case_id,
-            score=score,
-            reasoning=diff_tracker.emergency_reasoning,
-        )
-        if next_target == "EMERGENCY_ESCALATION":
-            # Clinically correct: score 7-8 + Reasoner says escalate
-            # → we have enough data, complete intake and send advisory
-            logger.info(
-                "intake_v3.urgent_complete",
-                case_id=case_id,
-                reason="Score 7-8 with EMERGENCY_ESCALATION target — completing intake for urgent handoff",
-            )
-            _sync_tracker_from_reasoner(tracker, reasoner_output)
-            tracker.message_count += 1
-            intake_data = tracker.to_intake_data()
-            urgent_msg = (
-                "⚠️ Dựa trên những gì bạn mô tả, tôi khuyến nghị bạn nên **gặp bác sĩ trong ngày hôm nay** "
-                "— không cần gọi cấp cứu, nhưng nên được khám sớm.\n\n"
-                "Tôi đã ghi nhận đầy đủ thông tin của bạn và sẽ chuyển cho bác sĩ xem xét ngay."
-            )
-            return {
-                "messages": [AIMessage(content=urgent_msg)],
-                "detected_language": detected_language,
-                "cultural_expressions": state.get("cultural_expressions", []) + cultural_expressions,
-                "is_emergency": False,
-                "updated_at": datetime.now(timezone.utc).isoformat(),
-                "intake_tracker": tracker.to_dict(),
-                "differential_tracker": diff_tracker.to_dict(),
-                "intake_data": intake_data,
-                "intake_complete": True,  # Hand off to Screening
-            }
+        logger.info("intake_v3.urgent_flag", case_id=case_id, score=score)
 
-    # narrative_done: true if already done in prior turns OR reasoner just set it
-    # Also true if the current next_target is NOT narrative_open (meaning LLM moved on)
-    _reasoner_narrative = reasoner_output.get("narrative_done", False)
+    # === Step 8b: Code-side skip tracking ===
+    _last_asked = state.get("last_asked_field") or ""
+    if _last_asked and _last_asked not in ("narrative_open", "cc", "age_gender", "unknown", ""):
+        _aq_check = reasoner_output.get("answer_quality", {})
+        _quality_check = _aq_check.get(_last_asked, "")
+        if _quality_check in ("skipped", "redirected", "vague", ""):
+            diff_tracker.increment_skip(_last_asked)
+
+    # === Step 9: CODE STATE MACHINE decides next field (LLM suggestion ignored) ===
+    _kf_now = reasoner_output.get("known_facts", {})
+    _aq_now = reasoner_output.get("answer_quality", {})
+    next_target, reason_for_target = _code_decide_next_field(
+        kf=_kf_now,
+        aq=_aq_now,
+        diff_tracker=diff_tracker,
+        state=state,
+        tracker=tracker,
+        reasoner_output=reasoner_output,
+    )
+    logger.info("intake_v3.code_next_field", field=next_target, reason=reason_for_target, case_id=case_id)
+
+    # === Step 9b: narrative_done latch ===
     current_narrative_done = (
         state.get("narrative_done", False)
-        or _reasoner_narrative
-        or (state.get("last_asked_field") == "narrative_open")  # last turn asked narrative → done now
+        or (state.get("last_asked_field") == "narrative_open")
+        or reasoner_output.get("narrative_done", False)
     )
 
-    # === Step 9: Validate next target (code-enforced) ===
-    skip_count = diff_tracker.get_skip_count(next_target)
+    # === Step 10: intake_complete from code state machine ===
+    intake_complete = (next_target == "INTAKE_COMPLETE")
+    if intake_complete:
+        hpi_filled, _ = tracker.get_hpi_coverage()
+        if hpi_filled < 4:
+            intake_complete = False
+            next_target = _find_next_oldcarts_target(tracker)
+            reason_for_target = f"Code gate: only {hpi_filled}/8 OLDCARTS"
 
-    # Code enforcement: if skip_count ≥ MAX → mark declined, force next
-    if skip_count >= MAX_SKIP_BEFORE_DECLINE and next_target not in ("EMERGENCY_ESCALATION", "INTAKE_COMPLETE"):
-        logger.info(
-            "intake_v3.field_declined",
-            case_id=case_id,
-            field=next_target,
-            skip_count=skip_count,
-        )
-        # Mark as declined in tracker
-        if next_target in diff_tracker.field_statuses:
-            diff_tracker.field_statuses[next_target].quality = "declined"
-        # Fallback to general progression
-        next_target = "general_followup"
-        reason_for_target = "Field declined after max retries"
-        skip_count = 0
-
-    # === Step 10: Check intake completeness ===
-    intake_complete = reasoner_output.get("intake_complete", False)
-
-    # Code-side validation: minimum OLDCARTS coverage
-    hpi_filled, hpi_total = tracker.get_hpi_coverage()
-    if intake_complete and hpi_filled < 6:
-        logger.warning(
-            "intake_v3.premature_complete_override",
-            case_id=case_id,
-            hpi_filled=hpi_filled,
-        )
+    # Urgent advisory when score 7-8 and intake is complete
+    # But first ensure critical safety questions were asked (vaginal_bleeding for female pelvic)
+    _kf_final = reasoner_output.get("known_facts", {})
+    _gender_final = (_kf_final.get("gender") or tracker.gender or "").lower()
+    _is_female_final = "nữ" in _gender_final or "female" in _gender_final
+    _complaint_final = (reasoner_output.get("complaint_category") or "").lower()
+    _vb_needed = _is_female_final and _complaint_final in ("abdominal_pain", "general", "")
+    _vb_asked = diff_tracker.is_field_sufficient("vaginal_bleeding") or diff_tracker.get_skip_count("vaginal_bleeding") >= 1
+    if score >= EMERGENCY_SCORE_URGENT and intake_complete and (_vb_needed and not _vb_asked):
+        # Must ask vaginal_bleeding first before completing
         intake_complete = False
-        next_target = _find_next_oldcarts_target(tracker)
-        reason_for_target = f"Code gate: only {hpi_filled}/8 OLDCARTS — need more"
+        next_target = "vaginal_bleeding"
+        reason_for_target = "Female + pelvic pain + score 7-8 — must rule out ectopic before handoff"
+        skip_count = diff_tracker.get_skip_count("vaginal_bleeding")
+
+    if score >= EMERGENCY_SCORE_URGENT and intake_complete:
+        _sync_tracker_from_reasoner(tracker, reasoner_output)
+        tracker.message_count += 1
+        intake_data = tracker.to_intake_data()
+        urgent_msg = (
+            "⚠️ Dựa trên những gì bạn mô tả, tôi khuyến nghị bạn nên **gặp bác sĩ trong ngày hôm nay** "
+            "— không cần gọi cấp cứu, nhưng nên được khám sớm.\n\n"
+            "Tôi đã ghi nhận đầy đủ thông tin của bạn và sẽ chuyển cho bác sĩ xem xét ngay."
+        )
+        return {
+            "messages": [AIMessage(content=urgent_msg)],
+            "detected_language": detected_language,
+            "cultural_expressions": state.get("cultural_expressions", []) + cultural_expressions,
+            "is_emergency": False,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "intake_tracker": tracker.to_dict(),
+            "differential_tracker": diff_tracker.to_dict(),
+            "intake_data": intake_data,
+            "intake_complete": True,
+        }
+
+    # skip_count for the field code just chose
+    skip_count = diff_tracker.get_skip_count(next_target)
 
     # === Step 11: Update IntakeTracker from reasoner known_facts ===
     _sync_tracker_from_reasoner(tracker, reasoner_output)
@@ -537,6 +503,162 @@ def _sync_tracker_from_reasoner(tracker: IntakeTracker, reasoner_output: dict) -
     # Mark intake complete if reasoner + code both agree
     if reasoner_output.get("intake_complete"):
         tracker.phase = "summary"
+
+
+def _is_field_done(field: str, kf: dict, aq: dict, diff_tracker: DifferentialTracker) -> bool:
+    """Code-enforced check: is this field sufficiently answered or declined?"""
+    q = aq.get(field, "")
+    if q in ("sufficient", "declined"):
+        return True
+    if diff_tracker.is_field_sufficient(field):
+        return True
+    val = kf.get(field)
+    # For boolean-negative fields, any value is sufficient
+    if val and val not in ("null", "None", ""):
+        return True
+    return False
+
+
+def _code_decide_next_field(
+    kf: dict,
+    aq: dict,
+    diff_tracker: DifferentialTracker,
+    state: dict,
+    tracker: "IntakeTracker",
+    reasoner_output: dict,
+) -> tuple[str, str]:
+    """
+    CODE-ENFORCED phase state machine.
+    Returns (next_field, reason).
+
+    LLM suggestion is IGNORED — code fully controls flow.
+    Rules:
+      - Gender unknown → ask gender before any gendered question
+      - Phases in order: CC → Narrative → HPI Core → Associated Symptoms (complaint-specific) → Social Hx → Family Hx → PMH → Medications → Allergies → COMPLETE
+      - Never jump phases (e.g., no urinary while asking PMH)
+      - Never ask gendered questions without confirmed gender
+      - Skip declined fields
+    """
+    gender = (kf.get("gender") or tracker.gender or "").lower()
+    cc = kf.get("cc") or tracker.cc or ""
+    complaint_cat = reasoner_output.get("complaint_category", "general")
+    is_female = "nữ" in gender or "female" in gender or "f" == gender
+
+    def done(f):
+        return _is_field_done(f, kf, aq, diff_tracker)
+
+    def skipped_max(f):
+        return diff_tracker.get_skip_count(f) >= MAX_SKIP_BEFORE_DECLINE
+
+    def next_undone(fields, reason):
+        for f in fields:
+            if not done(f) and not skipped_max(f):
+                return f, reason
+        return None, None
+
+    # Phase 1: CC
+    if not cc:
+        return "cc", "Chief complaint not yet captured"
+
+    # Phase 2: Narrative (once only)
+    narrative_done = (
+        state.get("narrative_done", False)
+        or state.get("last_asked_field") == "narrative_open"
+        or reasoner_output.get("narrative_done", False)
+    )
+    if not narrative_done:
+        return "narrative_open", "Open narrative — let patient describe in own words"
+
+    # Phase 3: HPI Core — OLDCARTS in clinical priority order
+    # Onset + Location first (highest yield for differential), then character, severity, etc.
+    hpi_order = ["onset", "location", "character", "severity", "aggravating", "alleviating", "duration", "timing"]
+    f, r = next_undone(hpi_order[:4], "Core HPI — highest yield for differential")
+    if f:
+        return f, r
+
+    # Phase 4a: Emergency-relevant associated symptoms (complaint-specific)
+    # ONLY based on complaint category
+    abdominal_cats = {"abdominal_pain", "general"}
+    chest_cats = {"chest_pain"}
+    head_cats = {"headache"}
+    resp_cats = {"respiratory"}
+
+    if complaint_cat in abdominal_cats or "đau bụng" in cc.lower() or "bụng" in cc.lower():
+        # Core: fever, nausea, anorexia (key for appendicitis/cancer)
+        f, r = next_undone(["fever", "nausea", "anorexia"], "Abdominal complaint — core associated symptoms")
+        if f:
+            return f, r
+        # Radiation (key discriminating feature)
+        if not done("radiation"):
+            return "radiation", "Radiation pattern — critical for renal colic vs appendicitis vs biliary"
+        # Bowel/urinary
+        f, r = next_undone(["bowel", "urinary"], "Abdominal — bowel/urinary changes")
+        if f:
+            return f, r
+        # Gendered: only if female confirmed
+        if is_female:
+            if not done("lmp") and not skipped_max("lmp"):
+                return "lmp", "Female + abdominal pain — LMP essential for ectopic/ovarian"
+            if not done("vaginal_bleeding") and not skipped_max("vaginal_bleeding"):
+                return "vaginal_bleeding", "Female + lower abdominal — rule out ectopic"
+        elif not gender:
+            # Gender unknown — ask gender first before any gendered question
+            return "age_gender", "Need gender to determine if LMP/pregnancy questions apply"
+
+    elif complaint_cat in chest_cats or "ngực" in cc.lower():
+        f, r = next_undone(["radiation", "dyspnea", "diaphoresis", "palpitations"], "Chest — discriminating symptoms")
+        if f:
+            return f, r
+
+    elif complaint_cat in head_cats or "đau đầu" in cc.lower():
+        f, r = next_undone(["fever", "nausea"], "Headache — meningismus screen")
+        if f:
+            return f, r
+
+    elif complaint_cat in resp_cats:
+        f, r = next_undone(["dyspnea", "fever", "nausea"], "Respiratory — associated symptoms")
+        if f:
+            return f, r
+
+    else:
+        # General: fever, nausea only
+        f, r = next_undone(["fever", "nausea"], "General — core associated symptoms")
+        if f:
+            return f, r
+
+    # Phase 4b: Remaining OLDCARTS (lower priority)
+    f, r = next_undone(hpi_order[4:], "Remaining HPI fields")
+    if f:
+        return f, r
+
+    # Phase 4c: Functional status (once)
+    if not done("functional_status") and not skipped_max("functional_status"):
+        return "functional_status", "Functional impact — severity validation"
+
+    # Phase 5: Demographic if still unknown
+    if not kf.get("age") and not tracker.age:
+        return "age_gender", "Age/gender still unknown"
+
+    # Phase 6: Social history — smoking then alcohol
+    _sh = kf.get("social_history") or ""
+    _sh_done = aq.get("social_history") == "sufficient" or done("social_history")
+    if not _sh_done and not skipped_max("social_history"):
+        return "social_history", "Social history — smoking/alcohol"
+
+    # Phase 7: Family history (only if relevant complaint)
+    _fh_relevant = complaint_cat in chest_cats | {"general"} or any(
+        w in cc.lower() for w in ["ngực", "tim", "đầu", "bụng"]
+    )
+    if _fh_relevant and not done("family_history") and not skipped_max("family_history"):
+        return "family_history", "Family history — hereditary/cardiac/cancer risk"
+
+    # Phase 8: PMH / Medications / Allergies
+    f, r = next_undone(["pmh", "medications", "allergies"], "Past medical history")
+    if f:
+        return f, r
+
+    # All done
+    return "INTAKE_COMPLETE", "All required fields collected"
 
 
 def _find_next_oldcarts_target(tracker: IntakeTracker) -> str:
