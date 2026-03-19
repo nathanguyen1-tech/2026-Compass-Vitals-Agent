@@ -157,17 +157,25 @@ async def chat_v3_ui():
     html = (STATIC_DIR / "chat-v2.html").read_text(encoding="utf-8")
     html = html.replace("/api/v1/chat-v2", "/api/v1/chat-v3")
     html = html.replace("Intake Agent V2", "Intake Agent V3")
-    html = html.replace("Trust LLM", "Two-LLM")
-    html = html.replace("Simplified Architecture", "Reasoner + Conversationalist")
+    return html
+
+
+@app.get("/chat-v4", response_class=HTMLResponse)
+async def chat_v4_ui():
+    """Serve the Intake Agent V4 Chat UI (Single LLM Senior Doctor)."""
+    html = (STATIC_DIR / "chat-v2.html").read_text(encoding="utf-8")
+    html = html.replace("/api/v1/chat-v2", "/api/v1/chat-v4")
+    html = html.replace("Intake Agent V2", "Intake Agent V4 — Senior Doctor")
     return html
 
 
 # Import and register routers after app creation to avoid circular imports
-from app.api.v1.routes import chat, chat_v2, chat_v3, flow, logs, sessions, voice_ws  # noqa: E402
+from app.api.v1.routes import chat, chat_v2, chat_v3, chat_v4, flow, logs, sessions, voice_ws  # noqa: E402
 
 app.include_router(chat.router, prefix="/api/v1", tags=["chat"])
 app.include_router(chat_v2.router, prefix="/api/v1", tags=["chat-v2"])
 app.include_router(chat_v3.router, prefix="/api/v1", tags=["chat-v3"])
+app.include_router(chat_v4.router, prefix="/api/v1", tags=["chat-v4"])
 app.include_router(flow.router, prefix="/api/v1", tags=["flow"])
 app.include_router(voice_ws.router, prefix="/api/v1", tags=["voice"])
 app.include_router(logs.router, prefix="/api/v1", tags=["logs"])

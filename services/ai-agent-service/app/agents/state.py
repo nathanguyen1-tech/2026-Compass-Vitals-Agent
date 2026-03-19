@@ -62,6 +62,8 @@ class CareFlowState(TypedDict):
     differential_tracker: dict | None  # V3: DifferentialTracker serialized state
     last_asked_field: str | None       # V3: what field the Conversationalist just asked about
     narrative_done: bool               # V3: whether open narrative phase has been completed
+    confirmed_facts: dict | None       # V4: code-extracted facts dict
+    turn_count: int                    # V4: number of patient turns so far
     narrative_complete: bool           # V3: True after open-ended narrative phase is done (alias)
 
     # === Internal Flow Control ===
