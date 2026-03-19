@@ -73,10 +73,13 @@ def extract_facts_from_text(text: str, existing_facts: dict) -> dict:
     facts = dict(existing_facts)
     t = text.lower()
 
-    # Gender
+    # Gender — check female first (more specific), then male
+    # Also handle "26 tuổi nữ" pattern (number + tuổi + gender word)
     if not facts.get("gender"):
+        # Female keywords
         if any(w in t for w in _GENDER_FEMALE):
             facts["gender"] = "female"
+        # Male keywords — only if no female keyword found
         elif any(w in t for w in _GENDER_MALE):
             facts["gender"] = "male"
 
@@ -102,8 +105,11 @@ def extract_facts_from_text(text: str, existing_facts: dict) -> dict:
             facts["social_history"] = (sh + "; không uống rượu bia").strip("; ")
 
     # Positive symptom extraction
-    if any(p in t for p in _FEVER_POSITIVE)    and not facts.get("fever"):
+    _fever_negated = any(p in t for p in ["không sốt", "không bị sốt", "no fever", "chưa sốt"])
+    if any(p in t for p in _FEVER_POSITIVE) and not _fever_negated and not facts.get("fever"):
         facts["fever"] = "yes"
+    elif _fever_negated and not facts.get("fever"):
+        facts["fever"] = "no"
     if any(p in t for p in _NAUSEA_POSITIVE)   and not facts.get("nausea"):
         facts["nausea"] = "yes"
     if any(p in t for p in _ANOREXIA_POSITIVE) and not facts.get("anorexia"):
@@ -132,9 +138,48 @@ def extract_facts_from_text(text: str, existing_facts: dict) -> dict:
 
     # Bowel/urinary negative
     _bowel_normal = ["đại tiện bình thường", "đại tiện ổn", "không tiêu chảy", "không táo bón"]
-    _urinary_normal = ["tiểu bình thường", "tiểu tiện bình thường", "không tiểu buốt"]
-    if any(p in t for p in _bowel_normal)   and not facts.get("bowel"):   facts["bowel"] = "normal"
-    if any(p in t for p in _urinary_normal) and not facts.get("urinary"): facts["urinary"] = "normal"
+    _urinary_normal = ["tiểu bình thường", "tiểu tiện bình thường", "không tiểu buốt", "không tiểu rắt", "không đau rát"]
+    _urinary_negative = ["không tiểu buốt", "không bất thường", "bình thường"]
+    if any(p in t for p in _bowel_normal)    and not facts.get("bowel"):   facts["bowel"] = "normal"
+    if any(p in t for p in _urinary_normal)  and not facts.get("urinary"): facts["urinary"] = "normal"
+
+    # Urinary negative answer to question
+    if not facts.get("urinary") and any(p in t for p in ["không", "no"] ) and "tiểu" in t:
+        facts["urinary"] = "normal"
+
+    # Severity extraction — "X/10" or "mức X" or "điểm X"
+    if not facts.get("severity"):
+        m = re.search(r'(\d{1,2})\s*/\s*10', t)
+        if not m:
+            m = re.search(r'(?:mức|điểm|đau)\s+(\d{1,2})\b', t)
+        if m:
+            score = int(m.group(1))
+            if 1 <= score <= 10:
+                facts["severity"] = f"{score}/10"
+
+    # Functional impact
+    _functional_impact = ["ảnh hưởng", "không đi lại được", "không đi được", "khó đi", "nằm một chỗ", "không làm việc", "không ngủ"]
+    if facts.get("severity") and not facts.get("functional_status"):
+        if any(p in t for p in _functional_impact):
+            curr = facts.get("severity", "")
+            facts["severity"] = curr + " — ảnh hưởng sinh hoạt"
+            facts["functional_status"] = "impaired"
+
+    # LMP extraction
+    _lmp_patterns = [
+        r"kinh\s+(?:nguyệt\s+)?(?:vừa|mới)\s+(?:xong|hết|có)",
+        r"(?:tuần|tháng|ngày)\s+(?:trước|qua)",
+        r"lần\s+cuối\s+(?:là|khoảng)",
+        r"\d+\s+(?:tuần|ngày|tháng)\s+trước",
+    ]
+    if not facts.get("lmp"):
+        for pat in _lmp_patterns:
+            if re.search(pat, t):
+                facts["lmp"] = "reported"
+                break
+    # LMP negative / not applicable
+    if not facts.get("lmp") and any(p in t for p in ["không ra máu", "không có kinh", "mãn kinh", "chưa có kinh"]):
+        facts["lmp"] = "not applicable"
 
     return facts
 

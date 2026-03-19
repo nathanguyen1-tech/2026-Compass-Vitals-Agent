@@ -236,70 +236,77 @@ Các mục BẮT BUỘC phải có trước khi kết thúc intake:
 □ Hút thuốc / rượu bia"""
 
 
+_HARD_REQUIRED = [
+    ("age",        "Tuổi"),
+    ("gender",     "Giới tính"),
+    ("cc",         "Lý do khám"),
+    ("onset",      "Khởi phát (khi nào, đột ngột hay từ từ)"),
+    ("location",   "Vị trí giải phẫu cụ thể"),
+    ("character",  "Tính chất đau"),
+    ("severity",   "Mức độ 1-10 + ảnh hưởng sinh hoạt"),
+    ("pmh",        "Bệnh nền (kể cả 'không có')"),
+    ("medications","Thuốc đang dùng (kể cả 'không có')"),
+    ("allergies",  "Dị ứng (kể cả 'không có')"),
+]
+
+_CATEGORY_EXTRAS = {
+    "abdominal_pain": [
+        ("fever",     "Sốt"),
+        ("nausea",    "Buồn nôn / nôn"),
+        ("bowel",     "Đại tiện thay đổi"),
+        ("urinary",   "Tiểu tiện bất thường"),
+        ("radiation", "Đau lan ra đâu"),
+    ],
+    "chest_pain": [
+        ("radiation",    "Đau lan (tay/vai/hàm)"),
+        ("dyspnea",      "Khó thở"),
+        ("diaphoresis",  "Đổ mồ hôi lạnh"),
+        ("palpitations", "Hồi hộp"),
+    ],
+    "headache": [
+        ("worst_headache_ever", "Đau đầu tệ nhất trong đời?"),
+        ("fever",               "Sốt"),
+        ("neck_stiffness",      "Cứng cổ"),
+    ],
+    "respiratory": [
+        ("dyspnea", "Khó thở"),
+        ("fever",   "Sốt"),
+    ],
+}
+
+
 def build_mandatory_injection(confirmed_facts: dict, gender: str, complaint_category: str) -> str:
-    """Build dynamic mandatory checklist based on what's still missing."""
-    always_required = [
-        ("age", "Tuổi"),
-        ("gender", "Giới tính"),
-        ("cc", "Lý do khám"),
-        ("onset", "Onset (khi nào, đột ngột hay từ từ)"),
-        ("location", "Vị trí cụ thể"),
-        ("character", "Tính chất"),
-        ("severity", "Mức độ 1-10 + ảnh hưởng sinh hoạt"),
-        ("aggravating", "Yếu tố làm nặng"),
-        ("alleviating", "Yếu tố giảm"),
-        ("duration", "Thời gian + pattern"),
-        ("pmh", "Bệnh nền"),
-        ("medications", "Thuốc đang dùng"),
-        ("allergies", "Dị ứng"),
-        ("social_history", "Hút thuốc / rượu bia"),
-    ]
-
-    category_extras = {
-        "abdominal_pain": [
-            ("fever", "Sốt"),
-            ("nausea", "Buồn nôn / nôn"),
-            ("anorexia", "Chán ăn"),
-            ("bowel", "Đại tiện / tiểu tiện"),
-            ("radiation", "Đau lan ra đâu"),
-        ],
-        "chest_pain": [
-            ("radiation", "Đau lan (cánh tay/vai/hàm)"),
-            ("dyspnea", "Khó thở"),
-            ("diaphoresis", "Đổ mồ hôi lạnh"),
-            ("palpitations", "Hồi hộp"),
-        ],
-        "headache": [
-            ("thunderclap", "Đau đầu tệ nhất trong đời?"),
-            ("fever", "Sốt"),
-            ("neck_stiffness", "Cứng cổ"),
-            ("visual_changes", "Thay đổi thị lực"),
-        ],
-    }
-
-    gendered = []
+    """Build dynamic mandatory checklist. Hard-required fields shown as BLOCKING."""
     is_female = "nữ" in gender.lower() or "female" in gender.lower()
-    if is_female and complaint_category in ("abdominal_pain", "general", "urinary"):
-        gendered = [
-            ("lmp", "Kinh nguyệt gần nhất"),
-            ("vaginal_bleeding", "Ra máu âm đạo bất thường"),
-        ]
 
-    required = always_required + category_extras.get(complaint_category, []) + gendered
+    # Hard required — MUST have before [INTAKE_DONE]
+    hard_missing = []
+    for field, label in _HARD_REQUIRED:
+        if not confirmed_facts.get(field):
+            hard_missing.append(label)
 
-    missing = []
-    for field, label in required:
-        val = confirmed_facts.get(field)
-        if not val or val in ("null", "None", "", "unknown"):
-            missing.append(f"□ {label}")
+    # Category-specific
+    cat_missing = []
+    for field, label in _CATEGORY_EXTRAS.get(complaint_category, []):
+        if not confirmed_facts.get(field):
+            cat_missing.append(label)
 
-    if not missing:
-        return "✅ Tất cả thông tin bắt buộc đã được thu thập."
+    # Gendered
+    if is_female and complaint_category in ("abdominal_pain", "general"):
+        if not confirmed_facts.get("lmp"):
+            cat_missing.append("Kinh nguyệt gần nhất")
 
-    # Show max 5 most important missing to avoid overwhelming
-    shown = missing[:5]
-    remaining = len(missing) - len(shown)
-    result = "Còn thiếu (hỏi sớm nhất có thể):\n" + "\n".join(shown)
-    if remaining > 0:
-        result += f"\n... và {remaining} mục khác"
+    if not hard_missing and not cat_missing:
+        return "✅ Đủ thông tin — có thể output [INTAKE_DONE]."
+
+    result = ""
+    if hard_missing:
+        result += "🚨 CHƯA ĐỦ — KHÔNG được output [INTAKE_DONE] khi còn thiếu:\n"
+        result += "\n".join(f"  ❌ {x}" for x in hard_missing[:6])
+        if len(hard_missing) > 6:
+            result += f"\n  ... và {len(hard_missing)-6} mục khác"
+    if cat_missing:
+        result += "\n⚠️ Nên hỏi thêm:\n"
+        result += "\n".join(f"  □ {x}" for x in cat_missing[:4])
+
     return result

@@ -231,13 +231,11 @@ async def intake_node_v4(
     if llm_wants_done:
         intake_complete = _validate_completion(confirmed_facts, complaint_category, turn_count)
         if not intake_complete:
-            logger.info(
-                "intake_v4.premature_done_blocked",
-                case_id=case_id,
-                turn_count=turn_count,
-                missing=_get_missing_fields(confirmed_facts, complaint_category),
-            )
-            # Don't complete — LLM will continue next turn with updated mandatory injection
+            missing = _get_hard_missing(confirmed_facts)
+            logger.info("intake_v4.premature_done_blocked", case_id=case_id, missing=missing)
+            # LLM tried to finish but code blocked — generate next question instead
+            patient_response = _ask_next_missing(confirmed_facts, complaint_category)
+
 
     # === Step 13: Final cleanup — strip any markers that leaked through ===
     patient_response = _EMERGENCY_MARKER.sub("", patient_response).strip()
@@ -269,21 +267,71 @@ async def intake_node_v4(
     }
 
 
+_HARD_REQUIRED_FIELDS = [
+    ("age",        "Bạn bao nhiêu tuổi?"),
+    ("gender",     "Bạn là nam hay nữ?"),
+    ("severity",   "Trên thang 1-10, cơn đau mấy điểm? Có ảnh hưởng sinh hoạt không?"),
+    ("pmh",        "Bạn có bệnh nền gì không — như tiểu đường, huyết áp, hay bệnh tim?"),
+    ("medications","Bạn đang dùng thuốc gì không?"),
+    ("allergies",  "Bạn có dị ứng với thuốc hay thức ăn gì không?"),
+]
+
+_CATEGORY_NEXT = {
+    "abdominal_pain": [
+        ("fever",   "Bạn có bị sốt không?"),
+        ("nausea",  "Bạn có buồn nôn hay nôn không?"),
+        ("bowel",   "Đại tiện có thay đổi gì không?"),
+        ("urinary", "Tiểu tiện có bất thường không?"),
+    ],
+    "chest_pain": [
+        ("radiation",   "Đau có lan lên vai hay cánh tay không?"),
+        ("dyspnea",     "Bạn có khó thở không?"),
+        ("diaphoresis", "Bạn có đổ mồ hôi lạnh không?"),
+    ],
+}
+
+
+def _get_hard_missing(facts: dict) -> list[str]:
+    return [f for f, _ in _HARD_REQUIRED_FIELDS if not facts.get(f)]
+
+
+def _ask_next_missing(facts: dict, category: str) -> str:
+    """Return the next question for the highest-priority missing field."""
+    # Hard required first
+    for field, question in _HARD_REQUIRED_FIELDS:
+        if not facts.get(field):
+            return question
+    # Category-specific
+    for field, question in _CATEGORY_NEXT.get(category, []):
+        if not facts.get(field):
+            return question
+    # LMP for female abdominal
+    if facts.get("gender") == "female" and category in ("abdominal_pain", "general"):
+        if not facts.get("lmp"):
+            return "Kinh nguyệt gần nhất của bạn khi nào?"
+    return "Bạn có muốn bổ sung thêm điều gì không?"
+
+
 def _validate_completion(facts: dict, category: str, turn_count: int) -> bool:
-    """Code-enforced completion gate."""
+    """Code-enforced completion gate — hard stop on critical fields."""
     if turn_count < MIN_TURNS_FOR_COMPLETION:
         return False
 
-    required = COMPLETION_REQUIRED_ALWAYS | COMPLETION_REQUIRED_BY_CATEGORY.get(category, set())
-    # Add gendered requirements
-    if facts.get("gender") == "female" and category in ("abdominal_pain", "general", "urinary"):
-        required.add("lmp")
+    # === HARD BLOCK: these fields MUST be present, no exceptions ===
+    hard_required = {"age", "gender", "cc", "onset", "location", "character", "severity",
+                     "pmh", "medications", "allergies"}
+    for field in hard_required:
+        if not facts.get(field):
+            return False  # Block no matter what LLM says
 
-    missing = _get_missing_fields(facts, category)
-    # Allow up to 2 missing non-critical fields (patient may have declined)
-    critical = {"age", "gender", "cc", "onset", "location", "character", "severity"}
-    critical_missing = [f for f in missing if f in critical]
-    return len(critical_missing) == 0 and len(missing) <= 2
+    # === Category-specific required fields ===
+    cat_required = COMPLETION_REQUIRED_BY_CATEGORY.get(category, set())
+    if facts.get("gender") == "female" and category in ("abdominal_pain", "general"):
+        cat_required = cat_required | {"lmp"}
+
+    missing_cat = [f for f in cat_required if not facts.get(f)]
+    # Allow max 1 missing category field (patient may have declined)
+    return len(missing_cat) <= 1
 
 
 def _get_missing_fields(facts: dict, category: str) -> list[str]:
