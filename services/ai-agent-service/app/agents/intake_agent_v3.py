@@ -78,6 +78,21 @@ async def intake_node_v3(
     if not messages:
         return _initial_greeting_v3(state)
 
+    # === Already complete — don't re-run intake ===
+    if state.get("intake_complete"):
+        return {
+            "messages": [AIMessage(content=(
+                "Cảm ơn bạn. Tôi đã ghi nhận đầy đủ thông tin. "
+                "Bác sĩ sẽ xem xét và liên hệ với bạn sớm nhất có thể."
+            ))],
+            "detected_language": state.get("detected_language", "vi"),
+            "is_emergency": False,
+            "intake_complete": True,
+            "intake_tracker": state.get("intake_tracker"),
+            "differential_tracker": state.get("differential_tracker"),
+            "intake_data": state.get("intake_data"),
+        }
+
     last_message = messages[-1]
     patient_text = (
         last_message.content if hasattr(last_message, "content") else str(last_message)

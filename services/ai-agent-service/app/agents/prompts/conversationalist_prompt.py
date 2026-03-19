@@ -24,14 +24,17 @@ CHỈ 1 câu hỏi. Hoặc 2 ý nếu chúng CÙNG chiều thời gian / cùng v
 CÁCH HỎI THEO FIELD
 ════════════════════════════════════════════════
 
-location      → Hỏi vị trí cụ thể, dùng mô tả cơ thể dễ hiểu
-               Ví dụ: "Bạn cảm thấy đau chính xác ở đâu — vùng trên rốn, dưới rốn, hay bên phải bên trái?"
+location      → Hỏi vị trí giải phẫu cụ thể — KHÔNG chấp nhận "bụng", "ngực", "đầu" chung chung
+               Ví dụ: "Bạn cảm thấy đau chính xác ở đâu — vùng trên rốn, dưới rốn phải, hay dưới rốn trái?"
+               Nếu đã nói "bụng": "Bạn có thể chỉ rõ hơn — vùng quanh rốn, phía trên gần dạ dày, hay phía dưới gần háng?"
 
-character     → Hỏi tính chất bằng ví dụ so sánh cụ thể
-               Ví dụ: "Cơn đau giống cảm giác nào hơn — âm ỉ như bị bóp, hay nhói như bị kim châm, hay co thắt từng cơn?"
+character     → Hỏi tính chất bằng ví dụ so sánh — KHÔNG chấp nhận "đau" hay "khó chịu" chung chung
+               Ví dụ: "Cơn đau giống cảm giác nào hơn — âm ỉ như bị bóp liên tục, hay nhói như bị kim châm từng cơn, hay co thắt từng đợt rồi bớt?"
+               Follow-up nếu trả lời sơ: "Đau có lan ra chỗ nào khác không — lưng, vai, háng?"
 
-onset         → Hỏi thời điểm và cách khởi phát
-               Ví dụ: "Cơn đau bắt đầu đột ngột hay từ từ tăng dần?"
+onset         → Hỏi thời điểm VÀ cách khởi phát (cần cả 2)
+               Nếu BN chỉ nói thời gian: probe thêm tính chất khởi phát
+               Ví dụ: "Cơn đau bắt đầu đột ngột hay từ từ tăng dần? Và lúc đó bạn đang làm gì?"
 
 severity      → Dùng thang 1-10 + hỏi ảnh hưởng chức năng
                Ví dụ: "Từ 1 đến 10, bạn cho cơn đau mấy điểm? Nó có làm bạn không ngủ được không?"
@@ -62,6 +65,13 @@ medications   → Hỏi thuốc kê toa + OTC + thuốc bắc/nam
 
 allergies     → Hỏi dị ứng và phản ứng cụ thể
                Ví dụ: "Bạn có bị dị ứng với thuốc hoặc thức ăn gì không? Phản ứng ra sao?"
+
+associated_symptoms → Hỏi triệu chứng đi kèm liên quan đến chief complaint
+               Hỏi từng nhóm, không gộp quá nhiều:
+               - "Bạn có bị sốt, buồn nôn, hay nôn không?"
+               - "Việc đi đại tiện, tiểu tiện có gì thay đổi không?"  (nếu đau bụng)
+               - "Bạn có bị khó thở hay tim đập nhanh không?"  (nếu đau ngực)
+               - "Kinh nguyệt gần nhất của bạn khi nào?"  (nếu nữ + đau bụng dưới)
 
 age_gender    → Hỏi tự nhiên trong câu đầu
                Ví dụ: "Bạn năm nay bao nhiêu tuổi và giới tính là nam hay nữ?"
