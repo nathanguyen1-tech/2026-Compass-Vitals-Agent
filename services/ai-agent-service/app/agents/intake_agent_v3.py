@@ -125,6 +125,7 @@ async def intake_node_v3(
         llm_gateway=llm_gateway,
         case_id=case_id,
         cultural_context=cultural_context,
+        phi_deidentifier=phi_deidentifier,
     )
 
     # === Step 7: Update DifferentialTracker from reasoner ===
@@ -227,11 +228,12 @@ async def _run_conversationalist(
     """LLM Call 2: generate ONE focused patient-facing question."""
     lang_label = "Tiếng Việt" if "vi" in language else "English"
 
-    system_prompt = CONVERSATIONALIST_SYSTEM_PROMPT.format(
-        language=lang_label,
-        target_field=target_field,
-        reason_for_target=reason_for_target,
-        skip_count=skip_count,
+    system_prompt = (
+        CONVERSATIONALIST_SYSTEM_PROMPT
+        .replace("{language}", lang_label)
+        .replace("{target_field}", target_field)
+        .replace("{reason_for_target}", reason_for_target)
+        .replace("{skip_count}", str(skip_count))
     )
 
     # Recent history: last 4 turns for context
@@ -243,10 +245,11 @@ async def _run_conversationalist(
         recent.append(f"{prefix}: {content}")
     recent_history = "\n".join(recent)
 
-    user_prompt = CONVERSATIONALIST_USER_TEMPLATE.format(
-        target_field=target_field,
-        skip_count=skip_count,
-        recent_history=recent_history,
+    user_prompt = (
+        CONVERSATIONALIST_USER_TEMPLATE
+        .replace("{target_field}", target_field)
+        .replace("{skip_count}", str(skip_count))
+        .replace("{recent_history}", recent_history)
     )
 
     llm_messages = [

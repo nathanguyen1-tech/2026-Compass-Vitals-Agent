@@ -81,6 +81,7 @@ async def run_clinical_reasoner(
     llm_gateway: LLMGateway,
     case_id: str,
     cultural_context: str = "",
+    phi_deidentifier=None,
 ) -> dict:
     """Run Clinical Reasoner: LLM Call 1.
 
@@ -105,13 +106,19 @@ async def run_clinical_reasoner(
     # Build conversation history
     history = _build_conversation_history(messages[:-1])  # Exclude last msg (= patient_message)
 
-    system_prompt = REASONER_SYSTEM_PROMPT.format(current_year=current_year)
+    # Use replace() not .format() — prompt contains JSON {} that would conflict
+    system_prompt = REASONER_SYSTEM_PROMPT.replace("{current_year}", str(current_year))
 
-    user_prompt = REASONER_USER_TEMPLATE.format(
-        clinical_state_summary=clinical_state or "First turn — no prior data.",
-        conversation_history=history or "No prior conversation.",
-        patient_message=patient_message,
+    user_prompt = (
+        REASONER_USER_TEMPLATE
+        .replace("{clinical_state_summary}", clinical_state or "First turn — no prior data.")
+        .replace("{conversation_history}", history or "No prior conversation.")
+        .replace("{patient_message}", patient_message)
     )
+
+    # Deidentify user_prompt to satisfy gateway PHI check
+    if phi_deidentifier is not None:
+        user_prompt, _ = phi_deidentifier.deidentify(user_prompt)
 
     llm_messages = [
         {"role": "system", "content": system_prompt},
@@ -128,7 +135,12 @@ async def run_clinical_reasoner(
         raw = response.content
     except Exception as e:
         logger.error("reasoner.llm_call_failed", case_id=case_id, error=str(e))
-        return dict(_FALLBACK_REASONER_OUTPUT)
+        # Smart fallback: reuse last known next_target from DifferentialTracker
+        fallback = dict(_FALLBACK_REASONER_OUTPUT)
+        if differential_tracker.next_target:
+            fallback["next_question_target"] = differential_tracker.next_target
+            fallback["reason_for_target"] = "Fallback: reusing last known target"
+        return fallback
 
     parsed = _parse_reasoner_json(raw)
 
