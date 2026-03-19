@@ -60,7 +60,7 @@ COMPLETION_REQUIRED_ALWAYS = {
 COMPLETION_REQUIRED_BY_CATEGORY = {
     "abdominal_pain": {
         "fever", "nausea", "bowel", "urinary", "radiation",
-        "meal_relation",   # đau liên quan bữa ăn / đi tiêu không
+        # meal_relation: nice-to-have, not blocking
     },
     "chest_pain":     {"radiation", "dyspnea", "diaphoresis"},
     "headache":       {"fever", "worst_headache_ever"},
@@ -128,13 +128,42 @@ async def intake_node_v4(
     _is_bare_negative = deidentified_text.strip().lower() in (
         "không", "ko", "k", "no", "nope", "không có", "không bị", "chưa", "không dùng"
     )
-    if _is_bare_negative:
-        # Infer from last AI message what was being asked
-        last_ai_msg = ""
-        for msg in reversed(messages[:-1]):  # skip current patient msg
+    # Get last AI message for all context-aware logic
+    _last_ai_content = ""
+    for _msg in reversed(messages[:-1]):
+        if isinstance(_msg, AIMessage):
+            _last_ai_content = (_msg.content if hasattr(_msg, "content") else str(_msg)).lower()
+            break
+
+    # Context-aware: bare negative "không" answers for ANY symptom field AI just asked
+    _SYMPTOM_KEYWORD_MAP = {
+        "nausea":    ["buồn nôn", "nôn", "nausea"],
+        "fever":     ["sốt", "fever", "nhiệt độ"],
+        "urinary":   ["tiểu", "urinary", "tiểu tiện"],
+        "anorexia":  ["chán ăn", "appetite", "ngon miệng"],
+        "dyspnea":   ["khó thở", "shortness", "hụt hơi"],
+        "radiation": ["lan ra", "radiation", "lan lên"],
+    }
+    if _is_bare_negative and _last_ai_content:
+        for field, keywords in _SYMPTOM_KEYWORD_MAP.items():
+            if any(kw in _last_ai_content for kw in keywords) and not confirmed_facts.get(field):
+                confirmed_facts[field] = "no"
+
+    # Context-aware: bare number after AI asks age
+    _bare_number = re.fullmatch(r'\d{1,3}', deidentified_text.strip())
+    if _bare_number and not confirmed_facts.get("age"):
+        last_ai_msg_for_age = ""
+        for msg in reversed(messages[:-1]):
             if isinstance(msg, AIMessage):
-                last_ai_msg = (msg.content if hasattr(msg, "content") else str(msg)).lower()
+                last_ai_msg_for_age = (msg.content if hasattr(msg, "content") else str(msg)).lower()
                 break
+        if "tuổi" in last_ai_msg_for_age or "age" in last_ai_msg_for_age:
+            age_val = int(deidentified_text.strip())
+            if 1 <= age_val <= 120:
+                confirmed_facts["age"] = str(age_val)
+
+    if _is_bare_negative:
+        last_ai_msg = _last_ai_content
         if last_ai_msg:
             _pmh_kw  = ["bệnh nền", "tiền sử", "bệnh lý", "medical history", "bệnh mãn", "bệnh tim", "tiểu đường", "huyết áp"]
             _meds_kw = ["thuốc", "medication", "dùng thuốc", "uống thuốc"]
@@ -295,8 +324,12 @@ async def intake_node_v4(
         if not intake_complete:
             missing = _get_hard_missing(confirmed_facts)
             logger.info("intake_v4.premature_done_blocked", case_id=case_id, missing=missing)
-            # LLM tried to finish but code blocked — generate next question instead
             patient_response = _ask_next_missing(confirmed_facts, complaint_category)
+
+    # Code-side auto-complete: if all required fields collected, complete regardless of LLM
+    if not intake_complete and _validate_completion(confirmed_facts, complaint_category, turn_count):
+        logger.info("intake_v4.auto_complete", case_id=case_id, turn_count=turn_count)
+        intake_complete = True
 
 
     # === Step 13: Final cleanup — strip any markers that leaked through ===

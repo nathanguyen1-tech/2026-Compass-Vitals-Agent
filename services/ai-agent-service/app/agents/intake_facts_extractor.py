@@ -83,9 +83,21 @@ def extract_facts_from_text(text: str, existing_facts: dict) -> dict:
         elif any(w in t for w in _GENDER_MALE):
             facts["gender"] = "male"
 
-    # Age — extract number before "tuổi" or "years old"
+    # Age — extract number + "tuổi", or standalone plausible age number
     if not facts.get("age"):
+        # Pattern 1: "26 tuổi" / "years old"
         m = re.search(r'(\d{1,3})\s*(?:tuổi|years?\s*old)', t)
+        if not m:
+            # Pattern 2: "tôi 30" / "mình 25" / bare number if only digits in message
+            m = re.search(r'(?:tôi|mình|em|con|anh|chị|ông|bà|cô|chú)\s+(\d{1,3})\b', t)
+        if not m:
+            # Pattern 3: standalone number that's plausible age (message is very short)
+            stripped = text.strip()
+            if re.fullmatch(r'\d{1,3}', stripped):
+                age_val = int(stripped)
+                if 1 <= age_val <= 120:
+                    facts["age"] = str(age_val)
+                    m = None  # already set
         if m:
             age = int(m.group(1))
             if 1 <= age <= 120:
@@ -135,6 +147,79 @@ def extract_facts_from_text(text: str, existing_facts: dict) -> dict:
         facts["vaginal_bleeding"] = "yes"
     if any(p in t for p in _NECK_STIFFNESS)    and not facts.get("neck_stiffness"):
         facts["neck_stiffness"] = "yes"
+
+    # CC extraction — chief complaint
+    if not facts.get("cc"):
+        _cc_patterns = [
+            (r'(?:bị|có)\s+(đau\s+\w+)', 'abdominal_pain'),
+            (r'(đau\s+bụng)', 'abdominal_pain'),
+            (r'(đau\s+ngực|tức\s+ngực)', 'chest_pain'),
+            (r'(đau\s+đầu)', 'headache'),
+            (r'(khó\s+thở|hụt\s+hơi)', 'respiratory'),
+            (r'(tiểu\s+buốt|tiểu\s+rắt)', 'urinary'),
+        ]
+        for pat, cat in _cc_patterns:
+            m_cc = re.search(pat, t)
+            if m_cc:
+                facts["cc"] = m_cc.group(1)
+                if not facts.get("complaint_category"):
+                    facts["complaint_category"] = cat
+                break
+
+    # Onset extraction
+    if not facts.get("onset"):
+        _onset_pats = [
+            r'(?:bắt\s+đầu|khởi\s+phát|bị)\s+(?:từ\s+)?(\d+\s+(?:tiếng|giờ|ngày|tuần|tháng)\s+(?:trước|qua|nay))',
+            r'(?:đau|bị)\s+(?:từ\s+)?(\w+\s+(?:hôm\s+qua|hôm\s+nay|sáng|tối|trưa))',
+            r'(\d+\s+(?:tiếng|giờ|ngày|tuần)\s+trước)',
+            r'(?:đau\s+)(đột\s+ngột|từ\s+từ|dần\s+dần)',
+        ]
+        for pat in _onset_pats:
+            m_onset = re.search(pat, t)
+            if m_onset:
+                facts["onset"] = m_onset.group(1)
+                break
+        # Also capture suddenness
+        if "đột ngột" in t and not facts.get("onset"):
+            facts["onset"] = "đột ngột"
+        elif "đột ngột" in t and facts.get("onset") and "đột ngột" not in facts["onset"]:
+            facts["onset"] = facts["onset"] + " — đột ngột"
+
+    # Location extraction (abdominal)
+    if not facts.get("location"):
+        _loc_map = [
+            (["hố chậu phải", "rlq", "right lower"], "hố chậu phải"),
+            (["hố chậu trái", "llq", "left lower"], "hố chậu trái"),
+            (["thượng vị", "trên rốn", "epigastric", "dạ dày"], "thượng vị/trên rốn"),
+            (["quanh rốn", "quanh rốn", "periumbilical"], "quanh rốn"),
+            (["dưới rốn", "hạ vị", "hypogastric", "below navel"], "dưới rốn"),
+            (["hông phải", "sườn phải", "right flank"], "hông sườn phải"),
+            (["hông trái", "sườn trái", "left flank"], "hông sườn trái"),
+            (["toàn bụng", "khắp bụng"], "toàn bụng"),
+        ]
+        for keywords, label in _loc_map:
+            if any(kw in t for kw in keywords):
+                facts["location"] = label
+                break
+
+    # Character extraction
+    if not facts.get("character"):
+        _char_map = [
+            (["nhói", "nhói từng cơn", "stabbing", "sharp"], "nhói từng cơn"),
+            (["âm ỉ", "dull", "aching"], "âm ỉ"),
+            (["co thắt", "cramping", "spasm"], "co thắt"),
+            (["bỏng rát", "burning"], "bỏng rát"),
+            (["tức", "pressure", "nặng nề"], "tức/nặng"),
+        ]
+        for keywords, label in _char_map:
+            if any(kw in t for kw in keywords):
+                facts["character"] = label
+                break
+
+    # Radiation
+    if not facts.get("radiation"):
+        if any(p in t for p in ["không lan", "không phóng", "does not radiate", "không lan ra"]):
+            facts["radiation"] = "không lan"
 
     # Bowel positive
     if not facts.get("bowel"):
