@@ -52,15 +52,21 @@ _INTAKE_DONE_MARKER = re.compile(r'\[INTAKE_DONE\]', re.IGNORECASE)
 MIN_TURNS_FOR_COMPLETION = 6
 
 # Minimum required facts before INTAKE_DONE
-COMPLETION_REQUIRED_ALWAYS = {"age", "gender", "cc", "onset", "location", "character", "severity"}
+COMPLETION_REQUIRED_ALWAYS = {
+    "age", "gender", "cc", "onset", "location", "character", "severity",
+    "pmh", "medications", "allergies",
+}
 
 COMPLETION_REQUIRED_BY_CATEGORY = {
-    "abdominal_pain": {"fever", "nausea", "bowel", "radiation", "pmh", "medications", "allergies"},
-    "chest_pain":     {"radiation", "dyspnea", "pmh", "medications", "allergies"},
-    "headache":       {"onset", "fever", "pmh", "allergies"},
-    "respiratory":    {"dyspnea", "fever", "pmh", "medications", "allergies"},
-    "urinary":        {"fever", "pmh", "medications", "allergies"},
-    "general":        {"fever", "pmh", "medications", "allergies"},
+    "abdominal_pain": {
+        "fever", "nausea", "bowel", "urinary", "radiation",
+        "meal_relation",   # đau liên quan bữa ăn / đi tiêu không
+    },
+    "chest_pain":     {"radiation", "dyspnea", "diaphoresis"},
+    "headache":       {"fever", "worst_headache_ever"},
+    "respiratory":    {"dyspnea", "fever"},
+    "urinary":        {"fever", "urinary"},
+    "general":        {"fever", "nausea"},
 }
 
 
@@ -233,7 +239,11 @@ async def intake_node_v4(
             )
             # Don't complete — LLM will continue next turn with updated mandatory injection
 
-    # === Step 13: PHI re-identification ===
+    # === Step 13: Final cleanup — strip any markers that leaked through ===
+    patient_response = _EMERGENCY_MARKER.sub("", patient_response).strip()
+    patient_response = _INTAKE_DONE_MARKER.sub("", patient_response).strip()
+
+    # PHI re-identification
     if phi_mapping:
         patient_response = phi_deidentifier.reidentify(patient_response, phi_mapping)
 
