@@ -123,6 +123,51 @@ async def intake_node_v4(
     confirmed_facts = dict(state.get("confirmed_facts") or {})
     confirmed_facts = extract_facts_from_text(deidentified_text, confirmed_facts)
 
+    # === Step 5b: Context-aware extraction — standalone "không/no" ===
+    # When patient answers just "không" to a specific question, infer what field they answered
+    _is_bare_negative = deidentified_text.strip().lower() in (
+        "không", "ko", "k", "no", "nope", "không có", "không bị", "chưa", "không dùng"
+    )
+    if _is_bare_negative:
+        # Infer from last AI message what was being asked
+        last_ai_msg = ""
+        for msg in reversed(messages[:-1]):  # skip current patient msg
+            if isinstance(msg, AIMessage):
+                last_ai_msg = (msg.content if hasattr(msg, "content") else str(msg)).lower()
+                break
+        if last_ai_msg:
+            _pmh_kw  = ["bệnh nền", "tiền sử", "bệnh lý", "medical history", "bệnh mãn", "bệnh tim", "tiểu đường", "huyết áp"]
+            _meds_kw = ["thuốc", "medication", "dùng thuốc", "uống thuốc"]
+            _allergy_kw = ["dị ứng", "allergy"]
+
+            if any(kw in last_ai_msg for kw in _pmh_kw)     and not confirmed_facts.get("pmh"):
+                confirmed_facts["pmh"] = "none"
+            if any(kw in last_ai_msg for kw in _meds_kw)    and not confirmed_facts.get("medications"):
+                confirmed_facts["medications"] = "none"
+            if any(kw in last_ai_msg for kw in _allergy_kw) and not confirmed_facts.get("allergies"):
+                confirmed_facts["allergies"] = "none"
+            if "sốt" in last_ai_msg and not confirmed_facts.get("fever"):
+                confirmed_facts["fever"] = "no"
+            if any(kw in last_ai_msg for kw in ["mang thai", "kinh nguyệt", "kinh"]) and not confirmed_facts.get("lmp"):
+                confirmed_facts["lmp"] = "none/not applicable"
+            if "tiểu" in last_ai_msg and not confirmed_facts.get("urinary"):
+                confirmed_facts["urinary"] = "normal"
+            if "hút thuốc" in last_ai_msg and not confirmed_facts.get("social_history"):
+                confirmed_facts["social_history"] = "no smoking"
+            if any(kw in last_ai_msg for kw in ["giới tính", "nam hay nữ", "nam hoặc nữ"]):
+                raw = deidentified_text.strip().lower()
+                if raw in ("nữ", "female", "f", "gái"):
+                    confirmed_facts["gender"] = "female"
+                elif raw in ("nam", "male", "m", "trai"):
+                    confirmed_facts["gender"] = "male"
+
+            # Heuristic: if AI asked combo (PMH + meds in same message) → "không" clears all 3
+            _asked_pmh  = any(kw in last_ai_msg for kw in _pmh_kw)
+            _asked_meds = any(kw in last_ai_msg for kw in _meds_kw)
+            if _asked_pmh and _asked_meds:
+                if not confirmed_facts.get("pmh"):         confirmed_facts["pmh"] = "none"
+                if not confirmed_facts.get("medications"):  confirmed_facts["medications"] = "none"
+
     # Detect complaint category
     complaint_category = confirmed_facts.get("complaint_category") or \
         detect_complaint_category(deidentified_text, confirmed_facts.get("cc", ""))
@@ -150,6 +195,23 @@ async def intake_node_v4(
 
     # === Step 8: Build conversation history for LLM ===
     turn_count = state.get("turn_count", 0) + 1
+
+    # Rebuild system prompt with UPDATED facts (after this turn's extraction)
+    mandatory_text = build_mandatory_injection(confirmed_facts, gender, complaint_category)
+    system_prompt = (
+        DOCTOR_SYSTEM_PROMPT
+        .replace("{language}", lang_label)
+        .replace("{mandatory_injection}", mandatory_text)
+        .replace("{complaint_specific_injection}", complaint_probe)
+    )
+
+    # Inject confirmed facts so LLM knows exactly what's collected — do NOT re-ask these
+    _SKIP_KEYS = {"complaint_category", "chest_pain_flag", "functional_status"}
+    _known = {k: v for k, v in confirmed_facts.items() if v and k not in _SKIP_KEYS}
+    if _known:
+        facts_lines = "\n".join(f"  ✓ {k}: {v}" for k, v in _known.items())
+        system_prompt += f"\n\n=== ĐÃ XÁC NHẬN — KHÔNG HỎI LẠI ===\n{facts_lines}"
+
     llm_messages = [{"role": "system", "content": system_prompt}]
 
     # Include full conversation (deidentified)

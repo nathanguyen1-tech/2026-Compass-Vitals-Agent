@@ -136,8 +136,13 @@ def extract_facts_from_text(text: str, existing_facts: dict) -> dict:
     if any(p in t for p in _NECK_STIFFNESS)    and not facts.get("neck_stiffness"):
         facts["neck_stiffness"] = "yes"
 
+    # Bowel positive
+    if not facts.get("bowel"):
+        if any(p in t for p in ["tiêu chảy", "diarrhea", "táo bón", "constipation", "phân có máu", "blood in stool"]):
+            facts["bowel"] = "abnormal - " + ("tiêu chảy" if "tiêu chảy" in t else "thay đổi")
+
     # Bowel/urinary negative
-    _bowel_normal = ["đại tiện bình thường", "đại tiện ổn", "không tiêu chảy", "không táo bón"]
+    _bowel_normal = ["đại tiện bình thường", "đại tiện ổn", "không tiêu chảy", "không táo bón", "đại tiện không thay đổi"]
     _urinary_normal = ["tiểu bình thường", "tiểu tiện bình thường", "không tiểu buốt", "không tiểu rắt", "không đau rát"]
     _urinary_negative = ["không tiểu buốt", "không bất thường", "bình thường"]
     if any(p in t for p in _bowel_normal)    and not facts.get("bowel"):   facts["bowel"] = "normal"
