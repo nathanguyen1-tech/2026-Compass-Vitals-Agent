@@ -88,7 +88,11 @@ timing →
   "Cơn đau có liên quan đến bữa ăn không — trước hay sau khi ăn?"
 
 fever →
-  "Bạn có đo nhiệt độ chưa? Kết quả bao nhiêu độ? Hay bạn chỉ cảm thấy người nóng?"
+  Lần đầu hỏi (skip_count == 0): chỉ hỏi có/không đơn giản.
+  "Bạn có bị sốt không?"
+  Nếu BN xác nhận có sốt (skip_count > 0 hoặc BN vừa nói có sốt):
+  "Bạn đo được bao nhiêu độ?"
+  KHÔNG hỏi "đo nhiệt độ chưa" hay "cảm thấy người nóng" khi BN chưa xác nhận có sốt.
 
 nausea →
   "Bạn có bị buồn nôn hoặc nôn không?"
