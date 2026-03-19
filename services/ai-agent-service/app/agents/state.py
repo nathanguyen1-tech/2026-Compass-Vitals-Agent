@@ -61,6 +61,8 @@ class CareFlowState(TypedDict):
     existing_history: dict | None  # Pre-existing patient data (PMH, meds, etc.)
     differential_tracker: dict | None  # V3: DifferentialTracker serialized state
     last_asked_field: str | None       # V3: what field the Conversationalist just asked about
+    narrative_done: bool               # V3: whether open narrative phase has been completed
+    narrative_complete: bool           # V3: True after open-ended narrative phase is done (alias)
 
     # === Internal Flow Control ===
     _critic_loops: int  # Track Critic → Proposer loop iterations

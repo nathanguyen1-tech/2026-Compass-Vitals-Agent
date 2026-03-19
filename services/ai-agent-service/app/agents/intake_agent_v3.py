@@ -143,6 +143,7 @@ async def intake_node_v3(
         cultural_context=cultural_context,
         phi_deidentifier=phi_deidentifier,
         last_asked_field=state.get("last_asked_field") or "unknown",
+        narrative_done=state.get("narrative_done", False),
     )
 
     # === Step 7: Update DifferentialTracker from reasoner ===
@@ -163,7 +164,9 @@ async def intake_node_v3(
     ]
     # Fields where a negative/normal answer from patient = clinically sufficient
     _NEGATIVE_SUFFICIENT_FIELDS = {
-        "fever", "nausea", "bowel", "urinary", "dyspnea", "palpitations",
+        "fever", "nausea", "anorexia", "bowel", "urinary", "dyspnea", "palpitations",
+        "diaphoresis", "jaundice", "weight_loss", "night_sweats",
+        "vaginal_bleeding", "radiation", "travel_history",
         "timing", "alleviating", "aggravating",  # OLDCARTS: "không có" is valid
     }
 
@@ -181,28 +184,54 @@ async def intake_node_v3(
             diff_tracker.update_from_reasoner(reasoner_output)
             logger.info("intake_v3.forced_sufficient", field=last_field, user_text=_raw_user_text[:80], case_id=case_id)
 
-    # Safety-by-code: extract PMH/medications/allergies from patient text directly
-    # Don't wait for Reasoner to pick them up — scan the message ourselves
-    _pmh_negatives    = ["không có bệnh nền", "không bệnh nền", "không bệnh gì", "khỏe mạnh", "no medical history", "không có tiền sử"]
-    _meds_negatives   = ["không dùng thuốc", "không uống thuốc", "không có thuốc", "no medication", "không thuốc"]
-    _allergy_negatives= ["không dị ứng", "không có dị ứng", "no allergy", "no allergies"]
+    # Safety-by-code: extract PMH/medications/allergies/social from patient text
+    _pmh_negatives     = ["không có bệnh nền", "không bệnh nền", "không bệnh gì", "khỏe mạnh", "no medical history", "không có tiền sử"]
+    _meds_negatives    = ["không dùng thuốc", "không uống thuốc", "không có thuốc", "no medication", "không thuốc"]
+    _allergy_negatives = ["không dị ứng", "không có dị ứng", "no allergy", "no allergies"]
+    _no_smoke          = ["không hút thuốc", "không hút", "chưa hút bao giờ", "no smoking", "non-smoker"]
+    _no_alcohol        = ["không uống rượu", "không uống bia", "không uống rượu bia", "no alcohol"]
+    _no_family_hx      = ["không có tiền sử gia đình", "gia đình không ai bị", "no family history"]
 
     _kf = reasoner_output.setdefault("known_facts", {})
     _aq = reasoner_output.setdefault("answer_quality", {})
     forced_fields = []
+
     if not _kf.get("pmh") and any(p in user_lower for p in _pmh_negatives):
         _kf["pmh"] = "none reported"; _aq["pmh"] = "sufficient"; forced_fields.append("pmh")
     if not _kf.get("medications") and any(p in user_lower for p in _meds_negatives):
         _kf["medications"] = "none"; _aq["medications"] = "sufficient"; forced_fields.append("medications")
     if not _kf.get("allergies") and any(p in user_lower for p in _allergy_negatives):
         _kf["allergies"] = "none"; _aq["allergies"] = "sufficient"; forced_fields.append("allergies")
+
+    # Social history negative extractions
+    _sh = _kf.get("social_history", "") or ""
+    if "không hút" not in _sh and any(p in user_lower for p in _no_smoke):
+        _kf["social_history"] = (_sh + "; không hút thuốc").strip("; ")
+        _aq["social_history"] = "partial"  # Alcohol still needed
+        forced_fields.append("social_history(smoke)")
+    if "không uống" not in _sh and any(p in user_lower for p in _no_alcohol):
+        existing = _kf.get("social_history", "") or ""
+        _kf["social_history"] = (existing + "; không uống rượu bia").strip("; ")
+        _aq["social_history"] = "sufficient"
+        forced_fields.append("social_history(alcohol)")
+    if not _kf.get("family_history") and any(p in user_lower for p in _no_family_hx):
+        _kf["family_history"] = "none reported"; _aq["family_history"] = "sufficient"; forced_fields.append("family_history")
+
     if forced_fields:
         diff_tracker.update_from_reasoner(reasoner_output)
-        logger.info("intake_v3.forced_pmh_extract", fields=forced_fields, case_id=case_id)
+        logger.info("intake_v3.forced_extract", fields=forced_fields, case_id=case_id)
 
     # === Step 8: Semantic emergency check — two-tier ===
     # Extract next_target early (needed for urgent override below)
     next_target = reasoner_output.get("next_question_target", "cc")
+
+    # Code-side guard: if narrative already done, never re-ask it
+    if next_target == "narrative_open" and state.get("narrative_done", False):
+        logger.info("intake_v3.narrative_already_done", case_id=case_id)
+        next_target = _find_next_oldcarts_target(tracker)
+        reasoner_output["next_question_target"] = next_target
+        reason_for_target = "Narrative done — proceeding with OLDCARTS"
+        reasoner_output["reason_for_target"] = reason_for_target
     reason_for_target = reasoner_output.get("reason_for_target", "")
 
     score = diff_tracker.emergency_score
@@ -289,11 +318,23 @@ async def intake_node_v3(
     _sync_tracker_from_reasoner(tracker, reasoner_output)
     tracker.message_count += 1
 
+    # === Step 11b: Determine narrative_done for state update ===
+    narrative_done = state.get("narrative_done", False)
+    if next_target == "narrative_open":
+        narrative_done = True  # Will be set after this turn's question is delivered
+
     # === Step 12: LLM CALL 2 — Conversationalist ===
     if next_target == "INTAKE_COMPLETE" or intake_complete:
         patient_response = _generate_summary(tracker)
         intake_complete = True
     else:
+        # Extract last patient message for acknowledgment
+        last_patient_message = ""
+        for msg in reversed(messages):
+            if isinstance(msg, HumanMessage):
+                last_patient_message = msg.content if hasattr(msg, "content") else str(msg)
+                break
+
         patient_response = await _run_conversationalist(
             target_field=next_target,
             reason_for_target=reason_for_target,
@@ -302,6 +343,7 @@ async def intake_node_v3(
             language=detected_language,
             llm_gateway=llm_gateway,
             case_id=case_id,
+            last_patient_message=last_patient_message,
         )
 
     # Re-identify PHI in response
@@ -322,6 +364,7 @@ async def intake_node_v3(
         "intake_data": intake_data if intake_data else None,
         "intake_complete": intake_complete,
         "last_asked_field": next_target,  # Track for next turn's Reasoner
+        "narrative_done": narrative_done,  # Persist narrative phase state
     }
 
 
@@ -333,6 +376,7 @@ async def _run_conversationalist(
     language: str,
     llm_gateway: LLMGateway,
     case_id: str,
+    last_patient_message: str = "",
 ) -> str:
     """LLM Call 2: generate ONE focused patient-facing question."""
     lang_label = "Tiếng Việt" if "vi" in language else "English"
@@ -343,6 +387,7 @@ async def _run_conversationalist(
         .replace("{target_field}", target_field)
         .replace("{reason_for_target}", reason_for_target)
         .replace("{skip_count}", str(skip_count))
+        .replace("{last_patient_message}", last_patient_message or "")
     )
 
     # Recent history: last 4 turns for context
@@ -358,6 +403,7 @@ async def _run_conversationalist(
         CONVERSATIONALIST_USER_TEMPLATE
         .replace("{target_field}", target_field)
         .replace("{skip_count}", str(skip_count))
+        .replace("{last_patient_message}", last_patient_message or "")
         .replace("{recent_history}", recent_history)
     )
 
@@ -410,11 +456,23 @@ def _sync_tracker_from_reasoner(tracker: IntakeTracker, reasoner_output: dict) -
         "aggravating": "aggravating", "alleviating": "alleviating",
         "timing": "timing", "severity": "severity",
         "pmh": "pmh", "medications": "medications", "allergies": "allergies",
+        "social_history": "social_family",
+        "family_history": "social_family",
     }
     for reasoner_key, tracker_field in field_map.items():
         value = known.get(reasoner_key)
         if value and value != "null":
             tracker.update_field(tracker_field, str(value))
+
+    # Sync new clinical fields to hpi_additional
+    hpi_additional_fields = [
+        "functional_status", "radiation", "anorexia", "weight_loss",
+        "night_sweats", "jaundice", "travel_history", "vaginal_bleeding", "diaphoresis",
+    ]
+    for field in hpi_additional_fields:
+        value = known.get(field)
+        if value and value != "null":
+            tracker.hpi_additional[field] = str(value)
 
     # Sync risk level
     emergency_score = reasoner_output.get("emergency_score", 0)
@@ -442,28 +500,41 @@ def _find_next_oldcarts_target(tracker: IntakeTracker) -> str:
 
 
 def _generate_summary(tracker: IntakeTracker) -> str:
-    """Generate intake summary for patient confirmation."""
+    """Generate intake summary — clean handoff, no open questions."""
     age = tracker.age or "Chưa rõ"
     gender = tracker.gender or "Chưa rõ"
     cc = tracker.cc or "Chưa rõ"
 
     hpi_parts = []
-    for field in ["onset", "location", "duration", "character", "severity", "aggravating", "alleviating"]:
+    for field in ["onset", "location", "duration", "character", "severity",
+                  "aggravating", "alleviating", "timing"]:
         val = tracker.hpi.get(field)
         if val:
-            hpi_parts.append(f"- {field.capitalize()}: {val}")
+            label = {
+                "onset": "Khởi phát", "location": "Vị trí", "duration": "Thời gian",
+                "character": "Tính chất", "severity": "Mức độ",
+                "aggravating": "Yếu tố làm nặng", "alleviating": "Yếu tố giảm",
+                "timing": "Diễn tiến",
+            }.get(field, field.capitalize())
+            hpi_parts.append(f"- {label}: {val}")
 
     summary = (
-        f"Cảm ơn bạn đã chia sẻ. Để xác nhận lại thông tin:\n\n"
         f"**Thông tin cơ bản:** {age} tuổi, {gender}\n"
         f"**Lý do khám:** {cc}\n"
     )
     if hpi_parts:
-        summary += "\n**Chi tiết triệu chứng:**\n" + "\n".join(hpi_parts)
+        summary += "\n**Diễn tiến triệu chứng:**\n" + "\n".join(hpi_parts)
+
+    extras = []
+    if tracker.pmh:        extras.append(f"**Bệnh nền:** {tracker.pmh}")
+    if tracker.medications: extras.append(f"**Thuốc:** {tracker.medications}")
+    if tracker.allergies:   extras.append(f"**Dị ứng:** {tracker.allergies}")
+    if extras:
+        summary += "\n\n" + "\n".join(extras)
 
     summary += (
-        "\n\nThông tin trên có đúng và đầy đủ chưa? "
-        "Bạn có muốn bổ sung hoặc chỉnh sửa điều gì không?"
+        "\n\nTôi đã ghi nhận đầy đủ thông tin. "
+        "Bác sĩ sẽ xem xét và liên hệ với bạn sớm nhất có thể."
     )
     return summary
 
