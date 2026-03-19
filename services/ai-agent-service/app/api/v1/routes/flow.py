@@ -8,6 +8,8 @@ GET  /flow/{session_id}/clinical-summary-v2 — LLM-generated clinical narrative
 GET  /flow/{session_id}/soap-note — get SOAP note narrative for MD
 """
 
+import asyncio
+
 import structlog
 from fastapi import APIRouter, HTTPException
 
@@ -32,6 +34,9 @@ router = APIRouter()
 
 # Re-use session store from chat module
 from app.api.v1.routes.chat import _sessions, _gateway, _phi  # noqa: E402
+from app.api.v1.routes import chat_v2 as _chat_v2_module  # noqa: E402
+from app.domain.services.session_persistence import load_session, persist_session  # noqa: E402
+
 
 
 @router.post("/flow/{session_id}/run", response_model=FlowStatusResponse)
@@ -40,7 +45,7 @@ async def run_care_flow(session_id: str):
 
     Requires intake to be complete (at least some messages in the session).
     """
-    session = _sessions.get(session_id)
+    session = await load_session(session_id)
     if session is None:
         raise HTTPException(status_code=404, detail="Session not found")
 
@@ -133,6 +138,9 @@ async def run_care_flow(session_id: str):
         except Exception as e:
             logger.error("soap.generation_failed", session_id=session_id, error=str(e))
 
+    # Persist updated session (with SOAP note, care plan, etc.)
+    asyncio.create_task(persist_session(session_id, session))
+
     current_agent = "complete" if care_plan is not None else "critic"
 
     logger.info(
@@ -163,7 +171,7 @@ async def run_care_flow(session_id: str):
 @router.get("/flow/{session_id}/status", response_model=FlowStatusResponse)
 async def get_flow_status(session_id: str):
     """Get current state of the care flow pipeline."""
-    session = _sessions.get(session_id)
+    session = await load_session(session_id)
     if session is None:
         raise HTTPException(status_code=404, detail="Session not found")
 
@@ -187,7 +195,7 @@ async def get_flow_status(session_id: str):
 @router.get("/flow/{session_id}/care-plan", response_model=CarePlanResponse)
 async def get_care_plan(session_id: str):
     """Get the generated care plan."""
-    session = _sessions.get(session_id)
+    session = await load_session(session_id)
     if session is None:
         raise HTTPException(status_code=404, detail="Session not found")
 
@@ -200,7 +208,7 @@ async def get_care_plan(session_id: str):
 @router.get("/flow/{session_id}/clinical-summary", response_model=ClinicalSummaryResponse)
 async def get_clinical_summary(session_id: str):
     """Get the structured clinical summary (HPI, CC, ROS) for MD review."""
-    session = _sessions.get(session_id)
+    session = await load_session(session_id)
     if session is None:
         raise HTTPException(status_code=404, detail="Session not found")
 
@@ -223,7 +231,7 @@ async def get_clinical_summary(session_id: str):
 )
 async def get_clinical_summary_v2(session_id: str):
     """Get the LLM-generated Clinical Summary v2 (HPI, CC, ROS narratives)."""
-    session = _sessions.get(session_id)
+    session = await load_session(session_id)
     if session is None:
         raise HTTPException(status_code=404, detail="Session not found")
 
@@ -248,7 +256,7 @@ async def get_clinical_summary_v2(session_id: str):
 @router.get("/flow/{session_id}/soap-note", response_model=SOAPNoteResponse)
 async def get_soap_note(session_id: str):
     """Get the SOAP note narrative for MD review."""
-    session = _sessions.get(session_id)
+    session = await load_session(session_id)
     if session is None:
         raise HTTPException(status_code=404, detail="Session not found")
 

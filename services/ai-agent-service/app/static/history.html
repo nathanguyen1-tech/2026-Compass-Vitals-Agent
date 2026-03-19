@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Compass Vitals — Lịch sử phiên khám</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f0f2f5;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Nav */
+        .nav { background: #1a1a2e; padding: 8px 24px; display: flex; gap: 16px; align-items: center; }
+        .nav a { color: #aaa; text-decoration: none; font-size: 13px; padding: 4px 12px; border-radius: 4px; }
+        .nav a:hover, .nav a.active { color: white; background: rgba(255,255,255,0.1); }
+        .nav-brand { color: white; font-weight: 700; font-size: 14px; margin-right: 16px; }
+
+        /* Header */
+        .header {
+            background: linear-gradient(135deg, #0066cc, #004999);
+            color: white;
+            padding: 14px 24px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        }
+        .header-icon { width: 36px; height: 36px; background: rgba(255,255,255,0.2); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 18px; }
+        .header-info h1 { font-size: 16px; font-weight: 600; }
+        .header-info p { font-size: 11px; opacity: 0.85; }
+        .header-right { margin-left: auto; }
+
+        /* Content */
+        .content { flex: 1; padding: 20px 24px; }
+
+        /* Toolbar */
+        .toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+        .toolbar h2 { font-size: 15px; color: #333; font-weight: 600; }
+        .refresh-btn { padding: 6px 16px; background: #004999; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; }
+        .refresh-btn:hover { background: #0066cc; }
+
+        /* Table */
+        .table-wrap { background: white; border-radius: 10px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); overflow: hidden; }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        thead { background: #eceff1; }
+        thead th { padding: 10px 14px; text-align: left; font-weight: 600; color: #546e7a; font-size: 12px; white-space: nowrap; }
+        tbody tr { border-bottom: 1px solid #f5f5f5; transition: background 0.15s; }
+        tbody tr:hover { background: #fafafa; }
+        tbody td { padding: 10px 14px; color: #333; vertical-align: middle; }
+        tbody td:first-child { font-family: monospace; font-size: 12px; color: #666; }
+
+        /* Severity badges */
+        .badge { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 10px; font-weight: 600; }
+        .badge-emergency { background: #ffebee; color: #c62828; }
+        .badge-urgent { background: #fff3e0; color: #e65100; }
+        .badge-routine { background: #e8f5e9; color: #2e7d32; }
+        .badge-none { background: #f5f5f5; color: #9e9e9e; }
+        .badge-complete { background: #e3f2fd; color: #1565c0; }
+        .badge-active { background: #f3e5f5; color: #6a1b9a; }
+
+        /* Action links */
+        .action-links { display: flex; gap: 6px; flex-wrap: wrap; }
+        .action-link { padding: 4px 10px; border-radius: 5px; font-size: 11px; font-weight: 600; text-decoration: none; transition: opacity 0.15s; white-space: nowrap; }
+        .action-link:hover { opacity: 0.8; }
+        .link-chat { background: #e3f2fd; color: #1565c0; }
+        .link-soap { background: #e8f5e9; color: #2e7d32; }
+        .link-plan { background: #fff3e0; color: #e65100; }
+        .link-copy { background: #f3e5f5; color: #6a1b9a; cursor: pointer; border: none; font-family: inherit; }
+
+        /* State */
+        .loading { text-align: center; padding: 40px; color: #888; font-size: 14px; }
+        .empty { text-align: center; padding: 60px 20px; color: #888; }
+        .empty h3 { font-size: 16px; margin-bottom: 8px; color: #555; }
+        .empty p { font-size: 13px; margin-bottom: 16px; }
+        .empty a { color: #0066cc; text-decoration: none; font-weight: 600; }
+
+        /* Toast */
+        .toast {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            display: flex; align-items: center; justify-content: center;
+            background: rgba(0,0,0,0.35);
+            opacity: 0; transition: opacity 0.25s;
+            pointer-events: none; z-index: 9999;
+        }
+        .toast.show { opacity: 1; }
+        .toast-inner {
+            background: #fff; border-radius: 14px;
+            padding: 28px 40px; text-align: center;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+            transform: scale(0.9); transition: transform 0.25s;
+        }
+        .toast.show .toast-inner { transform: scale(1); }
+        .toast-icon { font-size: 40px; margin-bottom: 10px; }
+        .toast-msg { font-size: 16px; font-weight: 600; color: #263238; }
+    </style>
+</head>
+<body>
+
+    <div class="nav">
+        <span class="nav-brand">Compass Vitals</span>
+        <a href="/">Chat V1</a>
+        <a href="/chat-v2">Chat V2</a>
+        <a href="/dashboard">Dashboard</a>
+        <a href="/clinical-summary">Clinical Summary</a>
+        <a href="/clinical-summary-v2">Summary v2</a>
+        <a href="/soap-note">SOAP Note</a>
+        <a href="/care-plan">Care Plan</a>
+        <a href="/logs">Logs</a>
+        <a href="/history" class="active">History</a>
+    </div>
+
+    <div class="header">
+        <div class="header-icon">&#128198;</div>
+        <div class="header-info">
+            <h1>Lịch sử phiên khám</h1>
+            <p>Xem lại các cuộc chat và SOAP note — chia sẻ link với đồng nghiệp</p>
+        </div>
+        <div class="header-right">
+            <button class="refresh-btn" onclick="loadHistory()">&#8635; Tải lại</button>
+        </div>
+    </div>
+
+    <div class="content">
+        <div class="toolbar">
+            <h2 id="countLabel">Đang tải...</h2>
+        </div>
+
+        <div class="table-wrap">
+            <div class="loading" id="loading">Đang tải dữ liệu...</div>
+            <div class="empty" id="empty" style="display:none">
+                <h3>Chưa có phiên khám nào</h3>
+                <p>Bắt đầu một cuộc chat mới để tạo phiên đầu tiên.</p>
+                <a href="/chat-v2">&#43; Cuộc chat mới</a>
+            </div>
+            <table id="historyTable" style="display:none">
+                <thead>
+                    <tr>
+                        <th>Session ID</th>
+                        <th>Thời gian</th>
+                        <th>Trạng thái</th>
+                        <th>Severity</th>
+                        <th>Chẩn đoán chính</th>
+                        <th>Tin nhắn</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="historyBody"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="toast" id="toast">
+        <div class="toast-inner">
+            <div class="toast-icon">✅</div>
+            <div class="toast-msg" id="toastMsg">Link đã copy!</div>
+        </div>
+    </div>
+
+    <script>
+        const severityClass = {
+            emergency: 'badge-emergency',
+            urgent: 'badge-urgent',
+            routine: 'badge-routine',
+        };
+        const severityLabel = {
+            emergency: '🚨 Emergency',
+            urgent: '⚠️ Urgent',
+            routine: '✓ Routine',
+        };
+
+        function formatDate(iso) {
+            if (!iso) return '—';
+            try {
+                const d = new Date(iso);
+                return d.toLocaleDateString('vi-VN') + ' ' + d.toLocaleTimeString('vi-VN', {hour:'2-digit', minute:'2-digit'});
+            } catch { return iso; }
+        }
+
+        function showToast(msg) {
+            const t = document.getElementById('toast');
+            document.getElementById('toastMsg').textContent = msg;
+            t.classList.add('show');
+            setTimeout(() => t.classList.remove('show'), 2000);
+        }
+
+        function copyLink(url) {
+            navigator.clipboard.writeText(url).then(() => showToast('Link đã copy!'));
+        }
+
+        function renderRow(s) {
+            const sevClass = severityClass[s.severity] || 'badge-none';
+            const sevLabel = severityLabel[s.severity] || (s.severity || '—');
+            const statusClass = s.status === 'complete' ? 'badge-complete' : 'badge-active';
+            const statusLabel = s.status === 'complete' ? 'Hoàn tất' : 'Đang dùng';
+            const diagText = s.primary_diagnosis || '—';
+            const sid = s.session_id;
+            const shortId = sid.substring(0, 8) + '...';
+
+            const chatUrl = `${location.origin}/chat-v2?session=${sid}`;
+            const soapUrl = `${location.origin}/soap-note?session=${sid}`;
+            const planUrl = `${location.origin}/care-plan?session=${sid}`;
+
+            const actionLinks = [
+                `<a class="action-link link-chat" href="${chatUrl}" target="_blank">💬 Chat</a>`,
+            ];
+            if (s.soap_note_ready) {
+                actionLinks.push(`<a class="action-link link-soap" href="${soapUrl}" target="_blank">📋 SOAP</a>`);
+                actionLinks.push(`<button class="action-link link-copy" onclick="copyLink('${soapUrl}')">🔗 Copy SOAP</button>`);
+            }
+            if (s.care_plan_ready) {
+                actionLinks.push(`<a class="action-link link-plan" href="${planUrl}" target="_blank">📄 Care Plan</a>`);
+            }
+            actionLinks.push(`<button class="action-link link-copy" onclick="copyLink('${chatUrl}')">🔗 Copy Chat</button>`);
+
+            return `<tr>
+                <td title="${sid}">${shortId}</td>
+                <td>${formatDate(s.created_at)}</td>
+                <td><span class="badge ${statusClass}">${statusLabel}</span></td>
+                <td><span class="badge ${sevClass}">${sevLabel}</span></td>
+                <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${diagText}">${diagText}</td>
+                <td style="text-align:center">${s.message_count}</td>
+                <td><div class="action-links">${actionLinks.join('')}</div></td>
+            </tr>`;
+        }
+
+        async function loadHistory() {
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('empty').style.display = 'none';
+            document.getElementById('historyTable').style.display = 'none';
+            document.getElementById('countLabel').textContent = 'Đang tải...';
+
+            try {
+                const res = await fetch('/api/v1/sessions?limit=100');
+                const sessions = await res.json();
+
+                document.getElementById('loading').style.display = 'none';
+
+                if (!sessions || sessions.length === 0) {
+                    document.getElementById('empty').style.display = 'block';
+                    document.getElementById('countLabel').textContent = 'Chưa có phiên khám';
+                    return;
+                }
+
+                document.getElementById('countLabel').textContent = `${sessions.length} phiên khám gần nhất`;
+                document.getElementById('historyBody').innerHTML = sessions.map(renderRow).join('');
+                document.getElementById('historyTable').style.display = 'table';
+            } catch (err) {
+                document.getElementById('loading').textContent = 'Lỗi tải dữ liệu: ' + err.message;
+            }
+        }
+
+        loadHistory();
+    </script>
+</body>
+</html>

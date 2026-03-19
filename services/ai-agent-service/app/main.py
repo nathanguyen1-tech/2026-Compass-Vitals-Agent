@@ -22,12 +22,37 @@ logger = structlog.get_logger()
 async def lifespan(app: FastAPI):
     """Startup/shutdown lifecycle."""
     logger.info("startup", service=settings.service_name, env=settings.environment)
+<<<<<<< HEAD
     # Verify DB connection on startup
     async with async_engine.connect() as conn:
         await conn.execute(sa.text("SELECT 1"))
     logger.info("database_connected", url=settings.database_url.split("@")[-1])
     yield
     await async_engine.dispose()
+=======
+
+    # Create DB tables (idempotent — safe to run on every startup)
+    try:
+        from app.db.engine import engine
+        from app.domain.models.base import Base
+        from app.domain.models import agent_session  # noqa: F401 — register model
+
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+        logger.info("db.tables_ready")
+    except Exception as e:
+        logger.warning("db.create_tables_failed", error=str(e))
+
+    yield
+
+    # Dispose engine on shutdown
+    try:
+        from app.db.engine import engine as _engine
+        await _engine.dispose()
+    except Exception:
+        pass
+
+>>>>>>> ubutu-intake-soap-v1
     logger.info("shutdown", service=settings.service_name)
 
 
@@ -63,6 +88,18 @@ async def compass_exception_handler(request, exc: CompassBaseException):
                 "message": exc.message,
             }
         },
+    )
+
+
+@app.exception_handler(Exception)
+async def generic_exception_handler(request, exc: Exception):
+    """Catch-all handler to surface hidden 500 errors."""
+    import traceback
+    tb = traceback.format_exc()
+    logger.error("unhandled_exception", error=str(exc), traceback=tb)
+    return JSONResponse(
+        status_code=500,
+        content={"error": {"code": "INTERNAL_ERROR", "message": str(exc)}},
     )
 
 
@@ -133,9 +170,25 @@ async def patient_dashboard_ui():
 
 # Import and register routers after app creation to avoid circular imports
 from app.api.v1.routes import chat, flow, logs, patients, voice_ws  # noqa: E402
+@app.get("/history", response_class=HTMLResponse)
+async def history_ui():
+    """Serve the session history page."""
+    return (STATIC_DIR / "history.html").read_text(encoding="utf-8")
+
+
+@app.get("/chat-v2", response_class=HTMLResponse)
+async def chat_v2_ui():
+    """Serve the Intake Agent V2 Chat UI."""
+    return (STATIC_DIR / "chat-v2.html").read_text(encoding="utf-8")
+
+
+# Import and register routers after app creation to avoid circular imports
+from app.api.v1.routes import chat, chat_v2, flow, logs, sessions, voice_ws  # noqa: E402
 
 app.include_router(chat.router, prefix="/api/v1", tags=["chat"])
+app.include_router(chat_v2.router, prefix="/api/v1", tags=["chat-v2"])
 app.include_router(flow.router, prefix="/api/v1", tags=["flow"])
 app.include_router(voice_ws.router, prefix="/api/v1", tags=["voice"])
 app.include_router(logs.router, prefix="/api/v1", tags=["logs"])
 app.include_router(patients.router, prefix="/api/v1", tags=["patients"])
+app.include_router(sessions.router, prefix="/api/v1", tags=["sessions"])
