@@ -49,8 +49,9 @@ EMERGENCY_MARKER_PATTERN = re.compile(r"\[EMERGENCY:([^\]]+)\]")
 # Max skip attempts before marking field as "declined"
 MAX_SKIP_BEFORE_DECLINE = 3
 
-# Emergency score threshold for immediate escalation
-EMERGENCY_SCORE_THRESHOLD = 7
+# Emergency score thresholds — two-tier system
+EMERGENCY_SCORE_URGENT = 7    # Score 7–8: needs care today (urgent, not ER)
+EMERGENCY_SCORE_CRITICAL = 9  # Score 9–10: life-threatening, call 115/911 NOW
 
 
 async def intake_node_v3(
@@ -131,15 +132,26 @@ async def intake_node_v3(
     # === Step 7: Update DifferentialTracker from reasoner ===
     diff_tracker.update_from_reasoner(reasoner_output)
 
-    # === Step 8: Semantic emergency check (reasoner score) ===
-    if diff_tracker.has_emergency():
+    # === Step 8: Semantic emergency check — two-tier ===
+    score = diff_tracker.emergency_score
+    if score >= EMERGENCY_SCORE_CRITICAL:
+        # Life-threatening → 115/911 NOW
         logger.warning(
-            "intake_v3.semantic_emergency",
+            "intake_v3.critical_emergency",
             case_id=case_id,
-            score=diff_tracker.emergency_score,
+            score=score,
             reasoning=diff_tracker.emergency_reasoning,
         )
-        return _emergency_response_v3(state, reason=diff_tracker.emergency_reasoning)
+        return _emergency_response_v3(state, reason=diff_tracker.emergency_reasoning, critical=True)
+    elif score >= EMERGENCY_SCORE_URGENT:
+        # Needs care today — flag but continue intake
+        logger.info(
+            "intake_v3.urgent_flag",
+            case_id=case_id,
+            score=score,
+            reasoning=diff_tracker.emergency_reasoning,
+        )
+        # Will inject urgent note into next response via conversationalist
 
     # === Step 9: Determine next target (code-validated) ===
     next_target = reasoner_output.get("next_question_target", "cc")
@@ -381,7 +393,7 @@ def _initial_greeting_v3(state: CareFlowState) -> dict:
     }
 
 
-def _emergency_response_v3(state: CareFlowState, reason: str = "") -> dict:
+def _emergency_response_v3(state: CareFlowState, reason: str = "", critical: bool = True) -> dict:
     """Emergency escalation response."""
     tracker = IntakeTracker(
         data=state.get("intake_tracker"),

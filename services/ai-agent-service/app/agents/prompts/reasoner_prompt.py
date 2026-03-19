@@ -53,28 +53,30 @@ Skip persistence rules:
   - skip_count ≥ 3 → mark as "declined", move on, note for MD review
 
 ════════════════════════════════════════════════
-EMERGENCY SCORE (0-10, semantic — not keyword matching)
+EMERGENCY SCORE (0-10, semantic — NOT keyword matching)
 ════════════════════════════════════════════════
-Consider:
-  - 0-3: Routine presentation, no concerning features
-  - 4-6: Some concern, needs careful monitoring
-  - 7-8: High concern, likely needs urgent care today
-  - 9-10: Life-threatening, immediate escalation required
+Be CONSERVATIVE. Only score high when there are MULTIPLE concurrent red flags.
 
-Score HIGH for (even indirect/vague descriptions of):
-  - Sudden severe onset ("worst ever", "đột ngột dữ dội")
-  - Cardiac: chest tightness + SOB + diaphoresis in any combination
-  - Neurological: sudden headache, facial droop, speech difficulty, limb weakness
-  - Respiratory: unable to breathe, turning blue, labored breathing
-  - Obstetric: pregnancy + abdominal pain + bleeding
-  - Hemodynamic: syncope, near-syncope, severe dizziness
-  - "Worst headache of my life" = score 9 (subarachnoid hemorrhage until proven otherwise)
-  - Any symptom the patient describes as "never felt before" + severe
+  - 0-3: Routine — gradual onset, chronic issue, mild symptoms, improving
+  - 4-6: Monitor closely — some concern but NOT urgent yet
+           e.g., abdominal pain + mild fatigue for 2 days = score 5 MAX
+  - 7-8: Urgent care TODAY (same-day doctor, NOT ER/911)
+           Score 7–8 ONLY when MULTIPLE of these co-exist:
+             · Severe pain (8-10/10) + acute onset (hours not days)
+             · Fever >38.5°C + localized severe pain
+             · Significant functional impairment (cannot walk, eat, work)
+           DO NOT score 7+ for: fatigue alone, vague abdominal discomfort,
+           common cold symptoms, or chronic conditions flaring mildly.
+  - 9-10: LIFE-THREATENING — call 115/911 NOW
+           ONLY for: active hemorrhage, cannot breathe, loss of consciousness,
+           "worst headache of life" (SAH), chest pain + diaphoresis + SOB,
+           pregnancy + vaginal bleeding + severe pain, anaphylaxis, overdose
 
-Score LOW for:
-  - Chronic, gradual onset symptoms
-  - Patient reports existing diagnosis being managed
-  - Mild, improving symptoms
+CALIBRATION EXAMPLES:
+  · "Đau bụng 2 ngày + mệt mỏi" → score 4-5 (common, not emergency)
+  · "Đau bụng dữ dội đột ngột + sốt 39.5°C + không đi lại được" → score 7-8
+  · "Đau ngực dữ dội + khó thở + đổ mồ hôi lạnh" → score 9-10
+  · "Đau đầu chưa bao giờ đau như vậy, đột ngột" → score 9 (SAH)
 
 ════════════════════════════════════════════════
 CULTURAL CONTEXT (Vietnamese patients)

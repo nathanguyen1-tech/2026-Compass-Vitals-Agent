@@ -162,7 +162,16 @@ class DifferentialTracker:
             and self.field_statuses.get(f, FieldStatus()).quality != "declined"
         ]
 
+    def is_critical_emergency(self) -> bool:
+        """Score 9–10: life-threatening, needs 115/911 immediately."""
+        return self.emergency_score >= 9
+
+    def is_urgent(self) -> bool:
+        """Score 7–8: needs care today but not necessarily ER."""
+        return 7 <= self.emergency_score < 9
+
     def has_emergency(self) -> bool:
+        """Legacy: any elevated score."""
         return self.emergency_score >= 7
 
     def summary_for_reasoner(self) -> str:
