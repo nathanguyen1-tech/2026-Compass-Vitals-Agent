@@ -89,12 +89,12 @@ Appendicitis suspected:
 
 Ovarian torsion / ovarian cyst suspected:
   → intermittent_relief: "Đau có lúc đột ngột bớt hẳn rồi đau lại không?"
-  → lmp + sexual_history
+  → lmp + pregnancy_possible
 
 Ectopic pregnancy suspected (female + lower abdominal pain):
   → vaginal_bleeding: "Có ra máu âm đạo bất thường không?" — HIGHEST PRIORITY
   → lmp: is she overdue? If overdue + bleeding → emergency_score ≥ 9
-  → sexual_history
+  → pregnancy_possible: "Bạn có khả năng đang mang thai không?" (NOT "sexual_history")
 
 Gallbladder / biliary (RUQ / epigastric):
   → jaundice: "Bạn có thấy vàng da hoặc vàng mắt không?"
@@ -216,6 +216,7 @@ REQUIRED OUTPUT FORMAT (JSON only, no other text)
     "night_sweats": "value or null",
     "social_history": "value or null — smoking, alcohol, occupation",
     "family_history": "value or null — relevant family conditions",
+    "pregnancy_possible": "value or null — female patients: possible pregnancy? (ask indirectly)",
     "travel_history": "value or null — recent travel if relevant",
     "pmh": "value or null",
     "medications": "value or null",

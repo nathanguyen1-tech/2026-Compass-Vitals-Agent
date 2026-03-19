@@ -150,6 +150,16 @@ class DifferentialTracker:
         """How many times has patient skipped/redirected this field."""
         return self.field_statuses.get(field, FieldStatus()).skip_count
 
+    def increment_skip(self, field: str) -> None:
+        """Increment skip_count for a field (code-enforced, not LLM-dependent)."""
+        if field not in self.field_statuses:
+            self.field_statuses[field] = FieldStatus()
+        status = self.field_statuses[field]
+        if status.quality not in ("sufficient", "declined"):
+            status.skip_count += 1
+            if status.quality not in ("skipped", "redirected"):
+                status.quality = "skipped"
+
     def is_field_sufficient(self, field: str) -> bool:
         status = self.field_statuses.get(field)
         return status is not None and status.quality == "sufficient"

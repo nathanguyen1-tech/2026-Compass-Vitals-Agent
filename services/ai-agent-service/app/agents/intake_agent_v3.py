@@ -221,18 +221,59 @@ async def intake_node_v3(
         diff_tracker.update_from_reasoner(reasoner_output)
         logger.info("intake_v3.forced_extract", fields=forced_fields, case_id=case_id)
 
+    # === Step 7c: Safety-by-code positive symptom extraction ===
+    # Extract POSITIVE answers that LLM might miss (not just negatives)
+    _POSITIVE_ANOREXIA = ["chán ăn", "mất cảm giác ngon", "không muốn ăn", "không thấy ngon", "không ăn được"]
+    _POSITIVE_NAUSEA   = ["buồn nôn", "nôn", "muốn ói", "ói"]
+    _POSITIVE_FEVER    = ["sốt", "nóng người", "nóng sốt"]
+    _POSITIVE_WEIGHT   = ["sụt cân", "gầy đi", "giảm cân không cố ý", "sút cân"]
+    _POSITIVE_SWEAT    = ["đổ mồ hôi đêm", "mồ hôi đêm"]
+
+    _pos_kf = reasoner_output.setdefault("known_facts", {})
+    _pos_aq = reasoner_output.setdefault("answer_quality", {})
+
+    def _force_positive(field, value):
+        if not _pos_kf.get(field):
+            _pos_kf[field] = value
+            _pos_aq[field] = "sufficient"
+
+    if any(p in user_lower for p in _POSITIVE_ANOREXIA): _force_positive("anorexia", "yes — chán ăn")
+    if any(p in user_lower for p in _POSITIVE_NAUSEA):   _force_positive("nausea", "yes — buồn nôn/nôn")
+    if any(p in user_lower for p in _POSITIVE_FEVER):    _force_positive("fever", "yes — sốt")
+    if any(p in user_lower for p in _POSITIVE_WEIGHT):   _force_positive("weight_loss", "yes — sụt cân")
+    if any(p in user_lower for p in _POSITIVE_SWEAT):    _force_positive("night_sweats", "yes — đổ mồ hôi đêm")
+
+    if _pos_kf != reasoner_output.get("known_facts", {}):
+        diff_tracker.update_from_reasoner(reasoner_output)
+
     # === Step 8: Semantic emergency check — two-tier ===
     # Extract next_target early (needed for urgent override below)
     next_target = reasoner_output.get("next_question_target", "cc")
 
-    # Code-side guard: if narrative already done, never re-ask it
-    if next_target == "narrative_open" and state.get("narrative_done", False):
+    # Code-side guard: narrative_open only valid ONCE (when last_asked_field != "narrative_open")
+    # Use state as ground truth — if last turn asked narrative, it's done now
+    narrative_done_state = (
+        state.get("narrative_done", False)
+        or state.get("last_asked_field") == "narrative_open"
+        or reasoner_output.get("narrative_done", False)
+    )
+    if next_target == "narrative_open" and narrative_done_state:
         logger.info("intake_v3.narrative_already_done", case_id=case_id)
-        next_target = _find_next_oldcarts_target(tracker)
+        next_target = _find_next_partial_or_oldcarts_target(tracker, diff_tracker, reasoner_output)
         reasoner_output["next_question_target"] = next_target
-        reason_for_target = "Narrative done — proceeding with OLDCARTS"
+        reason_for_target = "Narrative done — targeted OLDCARTS/discriminating question"
         reasoner_output["reason_for_target"] = reason_for_target
     reason_for_target = reasoner_output.get("reason_for_target", "")
+
+    # Code-side: track skip when patient doesn't answer the asked field
+    _last_asked = state.get("last_asked_field") or ""
+    if _last_asked and _last_asked not in ("narrative_open", "cc", "unknown", ""):
+        _aq = reasoner_output.get("answer_quality", {})
+        _quality = _aq.get(_last_asked, "")
+        if _quality in ("skipped", "redirected", "vague", ""):
+            # Patient didn't properly answer last field — increment skip
+            diff_tracker.increment_skip(_last_asked)
+            logger.info("intake_v3.skip_incremented_code", field=_last_asked, quality=_quality, case_id=case_id)
 
     score = diff_tracker.emergency_score
     if score >= EMERGENCY_SCORE_CRITICAL:
@@ -280,6 +321,15 @@ async def intake_node_v3(
                 "intake_complete": True,  # Hand off to Screening
             }
 
+    # narrative_done: true if already done in prior turns OR reasoner just set it
+    # Also true if the current next_target is NOT narrative_open (meaning LLM moved on)
+    _reasoner_narrative = reasoner_output.get("narrative_done", False)
+    current_narrative_done = (
+        state.get("narrative_done", False)
+        or _reasoner_narrative
+        or (state.get("last_asked_field") == "narrative_open")  # last turn asked narrative → done now
+    )
+
     # === Step 9: Validate next target (code-enforced) ===
     skip_count = diff_tracker.get_skip_count(next_target)
 
@@ -319,9 +369,8 @@ async def intake_node_v3(
     tracker.message_count += 1
 
     # === Step 11b: Determine narrative_done for state update ===
-    narrative_done = state.get("narrative_done", False)
-    if next_target == "narrative_open":
-        narrative_done = True  # Will be set after this turn's question is delivered
+    # True if: (a) already done before this turn, OR (b) we are asking narrative_open this turn
+    narrative_done = current_narrative_done or (next_target == "narrative_open")
 
     # === Step 12: LLM CALL 2 — Conversationalist ===
     if next_target == "INTAKE_COMPLETE" or intake_complete:
@@ -497,6 +546,39 @@ def _find_next_oldcarts_target(tracker: IntakeTracker) -> str:
         if not tracker.hpi.get(field):
             return field
     return "pmh"
+
+
+def _find_next_partial_or_oldcarts_target(
+    tracker: IntakeTracker,
+    diff_tracker: DifferentialTracker,
+    reasoner_output: dict,
+) -> str:
+    """Smart fallback: pick highest-yield missing field from reasoner known_facts."""
+    known = reasoner_output.get("known_facts", {})
+    quality = reasoner_output.get("answer_quality", {})
+
+    # Priority 1: OLDCARTS fields marked partial by reasoner
+    from app.agents.tools.intake_tracker import OLDCARTS_FIELDS
+    for field in OLDCARTS_FIELDS:
+        if quality.get(field) in ("partial", "vague"):
+            return field
+
+    # Priority 2: OLDCARTS fields null in known_facts
+    for field in OLDCARTS_FIELDS:
+        if not known.get(field) and quality.get(field) not in ("declined", "sufficient"):
+            return field
+
+    # Priority 3: Key associated symptoms not yet asked
+    for field in ["fever", "nausea", "anorexia", "bowel", "urinary", "radiation", "functional_status"]:
+        if not known.get(field) and quality.get(field) not in ("declined", "sufficient"):
+            return field
+
+    # Priority 4: Social/family/PMH
+    for field in ["social_history", "family_history", "pmh", "medications", "allergies"]:
+        if not known.get(field) and quality.get(field) not in ("declined", "sufficient"):
+            return field
+
+    return "INTAKE_COMPLETE"
 
 
 def _generate_summary(tracker: IntakeTracker) -> str:

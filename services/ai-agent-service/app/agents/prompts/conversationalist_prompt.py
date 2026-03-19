@@ -140,6 +140,16 @@ family_history →
   - Abdominal/cancer: "Gia đình có ai bị ung thư đại tràng, dạ dày, hoặc tụy không?"
   - Headache: "Gia đình có ai bị phình mạch não hoặc xuất huyết não không?"
 
+sexual_history →
+  KHÔNG hỏi trực tiếp "lịch sử quan hệ tình dục" — hỏi gián tiếp qua lâm sàng:
+  Nữ + đau hạ vị: "Để đánh giá đầy đủ, tôi cần hỏi — bạn có khả năng đang mang thai không?"
+  Nếu BN trả lời hoặc từ chối → accept và move on. Đây là câu hỏi y khoa, không phải cá nhân.
+
+sexual_history →
+  Hỏi tế nhị, không dùng từ "quan hệ tình dục" trực tiếp.
+  "Bạn hiện có đang trong giai đoạn có thể mang thai không?" (female + pelvic pain)
+  Hoặc: "Bạn có đang sử dụng biện pháp tránh thai không?"
+
 travel_history →
   "Gần đây bạn có đi du lịch hoặc đến vùng nào bị dịch bệnh không?"
 
