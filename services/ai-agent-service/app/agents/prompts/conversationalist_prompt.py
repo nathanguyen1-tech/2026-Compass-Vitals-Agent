@@ -66,9 +66,14 @@ allergies     → Hỏi dị ứng và phản ứng cụ thể
 age_gender    → Hỏi tự nhiên trong câu đầu
                Ví dụ: "Bạn năm nay bao nhiêu tuổi và giới tính là nam hay nữ?"
 
-EMERGENCY_ESCALATION → KHÔNG hỏi tiếp. Output câu cảnh báo khẩn cấp:
-               "⚠️ Dựa trên triệu chứng bạn mô tả, đây có thể là tình trạng cần xử lý NGAY. 
+EMERGENCY_ESCALATION → Chỉ dùng khi score 9-10 (life-threatening).
+               Output: "⚠️ Dựa trên triệu chứng bạn mô tả, đây có thể là tình trạng cần xử lý NGAY. 
                 Vui lòng gọi 115 (Việt Nam) hoặc 911 (Mỹ) ngay lập tức, hoặc đến phòng cấp cứu gần nhất."
+
+urgent_advisory → Score 7-8: cần gặp bác sĩ hôm nay, KHÔNG phải ER/911.
+               Output câu hỏi tiếp theo + 1 ghi chú nhẹ:
+               "Dựa trên thông tin bạn cung cấp, tôi khuyến nghị bạn nên gặp bác sĩ trong ngày hôm nay.
+                Trong khi chờ, [tiếp tục câu hỏi intake bình thường]"
 
 ════════════════════════════════════════════════
 XỬ LÝ KHI BỆNH NHÂN ĐÃ BỎ QUA (skip_count > 0)

@@ -133,6 +133,10 @@ async def intake_node_v3(
     diff_tracker.update_from_reasoner(reasoner_output)
 
     # === Step 8: Semantic emergency check — two-tier ===
+    # Extract next_target early (needed for urgent override below)
+    next_target = reasoner_output.get("next_question_target", "cc")
+    reason_for_target = reasoner_output.get("reason_for_target", "")
+
     score = diff_tracker.emergency_score
     if score >= EMERGENCY_SCORE_CRITICAL:
         # Life-threatening → 115/911 NOW
@@ -144,18 +148,21 @@ async def intake_node_v3(
         )
         return _emergency_response_v3(state, reason=diff_tracker.emergency_reasoning, critical=True)
     elif score >= EMERGENCY_SCORE_URGENT:
-        # Needs care today — flag but continue intake
+        # Needs care today — flag but continue intake (NOT 115/911)
         logger.info(
             "intake_v3.urgent_flag",
             case_id=case_id,
             score=score,
             reasoning=diff_tracker.emergency_reasoning,
         )
-        # Will inject urgent note into next response via conversationalist
+        # Override EMERGENCY_ESCALATION target → conversationalist would output 115 otherwise
+        if next_target == "EMERGENCY_ESCALATION":
+            next_target = diff_tracker.field_statuses and \
+                next((f for f, s in diff_tracker.field_statuses.items()
+                      if s.quality not in ("sufficient", "declined")), None) or "pmh"
+            reason_for_target = "Urgent flag (score 7-8) — continue intake, advise seeing doctor today"
 
-    # === Step 9: Determine next target (code-validated) ===
-    next_target = reasoner_output.get("next_question_target", "cc")
-    reason_for_target = reasoner_output.get("reason_for_target", "")
+    # === Step 9: Validate next target (code-enforced) ===
     skip_count = diff_tracker.get_skip_count(next_target)
 
     # Code enforcement: if skip_count ≥ MAX → mark declined, force next
