@@ -66,6 +66,7 @@ async def chat_v3(request: ChatRequest):
             "input_mode": "text",
             "intake_tracker": None,
             "differential_tracker": None,
+            "last_asked_field": None,
             "existing_history": None,
             "created_at": datetime.now(timezone.utc).isoformat(),
             "updated_at": datetime.now(timezone.utc).isoformat(),
@@ -149,6 +150,7 @@ async def chat_v3(request: ChatRequest):
     )
     session["intake_tracker"] = result.get("intake_tracker", session.get("intake_tracker"))
     session["differential_tracker"] = result.get("differential_tracker", session.get("differential_tracker"))
+    session["last_asked_field"] = result.get("last_asked_field", session.get("last_asked_field"))
     session["intake_data"] = result.get("intake_data", session.get("intake_data"))
     session["intake_complete"] = result.get("intake_complete", session.get("intake_complete", False))
 

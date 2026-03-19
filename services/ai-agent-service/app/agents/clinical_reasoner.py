@@ -82,6 +82,7 @@ async def run_clinical_reasoner(
     case_id: str,
     cultural_context: str = "",
     phi_deidentifier=None,
+    last_asked_field: str = "unknown",
 ) -> dict:
     """Run Clinical Reasoner: LLM Call 1.
 
@@ -112,6 +113,7 @@ async def run_clinical_reasoner(
     user_prompt = (
         REASONER_USER_TEMPLATE
         .replace("{clinical_state_summary}", clinical_state or "First turn — no prior data.")
+        .replace("{last_asked_field}", last_asked_field or "unknown (first turn)")
         .replace("{conversation_history}", history or "No prior conversation.")
         .replace("{patient_message}", patient_message)
     )

@@ -142,6 +142,7 @@ async def intake_node_v3(
         case_id=case_id,
         cultural_context=cultural_context,
         phi_deidentifier=phi_deidentifier,
+        last_asked_field=state.get("last_asked_field") or "unknown",
     )
 
     # === Step 7: Update DifferentialTracker from reasoner ===
@@ -268,6 +269,7 @@ async def intake_node_v3(
         "differential_tracker": diff_tracker.to_dict(),
         "intake_data": intake_data if intake_data else None,
         "intake_complete": intake_complete,
+        "last_asked_field": next_target,  # Track for next turn's Reasoner
     }
 
 

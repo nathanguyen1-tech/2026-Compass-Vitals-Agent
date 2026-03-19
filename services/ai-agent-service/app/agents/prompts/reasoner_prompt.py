@@ -108,11 +108,22 @@ Be CONSERVATIVE. Only score high when there are MULTIPLE concurrent red flags.
            "worst headache of life" (SAH), chest pain + diaphoresis + SOB,
            pregnancy + vaginal bleeding + severe pain, anaphylaxis, overdose
 
-CALIBRATION EXAMPLES:
-  · "Đau bụng 2 ngày + mệt mỏi" → score 4-5 (common, not emergency)
-  · "Đau bụng dữ dội đột ngột + sốt 39.5°C + không đi lại được" → score 7-8
+CALIBRATION EXAMPLES — ABDOMINAL PAIN (common source of over-scoring):
+  · "Đau bụng 2 ngày + mệt mỏi, không sốt" → score 3-4
+  · "Đau hố chậu phải, đột ngột, 7/10, nữ 25t, không sốt, không nôn" → score 7
+    (appendicitis concern = needs ER TODAY, NOT score 9, NOT 911 right now)
+  · "Đau hố chậu phải + sốt 38.8 + nôn nhiều + không đi được" → score 8
+  · "Đau bụng dữ dội + bụng cứng như gỗ + mạch nhanh + tụt huyết áp" → score 9-10
+
+CALIBRATION EXAMPLES — OTHER:
   · "Đau ngực dữ dội + khó thở + đổ mồ hôi lạnh" → score 9-10
   · "Đau đầu chưa bao giờ đau như vậy, đột ngột" → score 9 (SAH)
+  · "Đau bụng + nữ có thai + chảy máu âm đạo" → score 9-10 (ectopic)
+  · "RLQ pain young female WITHOUT fever/vomiting/hemodynamic instability" → MAX score 7-8
+
+RULE: Score 9-10 ONLY with hemodynamic instability, inability to breathe,
+      loss of consciousness, active hemorrhage, or "worst pain ever" acute onset.
+      Appendicitis/ovarian cyst/torsion WITHOUT rupture signs = score 7-8 MAX.
 
 ════════════════════════════════════════════════
 CULTURAL CONTEXT (Vietnamese patients)
@@ -141,7 +152,10 @@ REQUIRED OUTPUT FORMAT (JSON only, no other text)
     "alleviating": "value or null",
     "timing": "value or null",
     "severity": "value or null — include 1-10 scale AND functional impact",
-    "associated_symptoms": "value or null — complaint-specific associated symptoms probed",
+    "associated_symptoms": "value or null — fever, nausea, vomiting, etc.",
+    "lmp": "value or null — last menstrual period (female patients only, ask once, accept 'đang kinh/vừa xong/2 tuần trước' as sufficient)",
+    "urinary": "value or null — urinary symptoms (accept 'bình thường' as sufficient if stated clearly)",
+    "bowel": "value or null — bowel changes (accept 'bình thường' as sufficient if stated clearly)",
     "pmh": "value or null",
     "medications": "value or null",
     "allergies": "value or null",
@@ -188,11 +202,21 @@ REASONER_USER_TEMPLATE = """\
 === CLINICAL STATE (from previous turns) ===
 {clinical_state_summary}
 
+=== LAST QUESTION ASKED BY AI ===
+Field: {last_asked_field}
+(Use this to judge if patient's latest message answered this field.
+ Even if they answered a different field, extract that info too.)
+
 === CONVERSATION HISTORY ===
 {conversation_history}
 
 === LATEST PATIENT MESSAGE ===
 {patient_message}
+
+IMPORTANT: Extract ALL clinical information from patient message, regardless of
+which question was asked. If patient answered a different field than {last_asked_field},
+mark {last_asked_field} as "skipped" AND update the field they actually answered.
+If patient said something vague like "bình thường", "không biết", "ổn" → mark as "vague", probe deeper.
 
 Analyze and output JSON.
 """
