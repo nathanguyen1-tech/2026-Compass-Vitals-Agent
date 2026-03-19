@@ -152,10 +152,10 @@ async def chat_v3(request: ChatRequest):
     session["intake_tracker"] = result.get("intake_tracker", session.get("intake_tracker"))
     session["differential_tracker"] = result.get("differential_tracker", session.get("differential_tracker"))
     session["last_asked_field"] = result.get("last_asked_field", session.get("last_asked_field"))
-    session["narrative_done"] = result.get("narrative_done", session.get("narrative_done", False))
+    # narrative_done is a one-way latch: once True, never revert to False
+    session["narrative_done"] = session.get("narrative_done", False) or result.get("narrative_done", False)
     session["intake_data"] = result.get("intake_data", session.get("intake_data"))
     session["intake_complete"] = result.get("intake_complete", session.get("intake_complete", False))
-    session["narrative_done"] = result.get("narrative_done", session.get("narrative_done", False))
 
     # Extract AI response
     ai_response = ""
