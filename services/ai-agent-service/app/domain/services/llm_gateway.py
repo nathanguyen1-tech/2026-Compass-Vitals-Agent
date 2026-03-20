@@ -92,8 +92,9 @@ class LLMGateway:
         **kwargs,
     ) -> LLMResponse:
         """Generate với PHI verification + retry + fallback + observability logging."""
-        # BƯỚC 1: PHI Verification Gate
-        self._verify_no_phi(messages, case_id)
+        # BƯỚC 1: PHI Verification Gate (skip for auto-test — synthetic data only)
+        if not agent_type.startswith("auto_test_"):
+            self._verify_no_phi(messages, case_id)
 
         # BƯỚC 2: Chọn provider dựa trên agent type
         provider = self._select_provider(agent_type)

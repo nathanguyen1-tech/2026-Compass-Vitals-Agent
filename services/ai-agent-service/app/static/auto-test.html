@@ -1,0 +1,825 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Compass Vitals — Auto Test</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f0f2f5;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Nav */
+        .nav { background: #1a1a2e; padding: 8px 24px; display: flex; gap: 16px; align-items: center; }
+        .nav a { color: #aaa; text-decoration: none; font-size: 13px; padding: 4px 12px; border-radius: 4px; }
+        .nav a:hover, .nav a.active { color: white; background: rgba(255,255,255,0.1); }
+        .nav-brand { color: white; font-weight: 700; font-size: 14px; margin-right: 16px; }
+
+        /* Header */
+        .header {
+            background: linear-gradient(135deg, #0066cc, #004999);
+            color: white;
+            padding: 14px 24px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        }
+        .header-icon { width: 36px; height: 36px; background: rgba(255,255,255,0.2); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 18px; }
+        .header-info h1 { font-size: 16px; font-weight: 600; }
+        .header-info p { font-size: 11px; opacity: 0.85; }
+
+        /* Main layout */
+        .main-layout {
+            flex: 1;
+            display: flex;
+            overflow: hidden;
+        }
+
+        /* Left: Chat display */
+        .chat-panel {
+            flex: 7;
+            display: flex;
+            flex-direction: column;
+            border-right: 2px solid #e0e0e0;
+        }
+        .chat-header {
+            background: #fafafa;
+            padding: 8px 16px;
+            border-bottom: 1px solid #e0e0e0;
+            font-size: 13px;
+            color: #666;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .chat-header .case-info { font-weight: 600; color: #333; }
+        .chat-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .message { max-width: 80%; padding: 10px 14px; border-radius: 16px; line-height: 1.5; font-size: 13px; animation: fadeIn 0.3s ease; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+        .message.agent { align-self: flex-start; background: white; color: #1a1a1a; border-bottom-left-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .message.patient { align-self: flex-end; background: #0066cc; color: white; border-bottom-right-radius: 4px; }
+        .message.system-msg { align-self: center; background: #e8f5e9; color: #2e7d32; font-size: 12px; padding: 6px 14px; border-radius: 20px; font-weight: 500; }
+        .msg-label { font-size: 10px; font-weight: 600; margin-bottom: 3px; opacity: 0.7; }
+        .msg-label.agent-label { color: #0066cc; }
+        .msg-label.patient-label { color: rgba(255,255,255,0.8); }
+        .chat-placeholder {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #999;
+            font-size: 14px;
+            text-align: center;
+            padding: 40px;
+        }
+
+        /* Right: Control panel */
+        .control-panel {
+            flex: 3;
+            display: flex;
+            flex-direction: column;
+            background: #fafafa;
+            overflow-y: auto;
+        }
+        .panel-section {
+            padding: 14px 16px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        .panel-section h3 {
+            font-size: 12px;
+            text-transform: uppercase;
+            color: #666;
+            margin-bottom: 10px;
+            letter-spacing: 0.5px;
+        }
+
+        /* Settings */
+        .setting-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+        .setting-row label { font-size: 13px; color: #333; }
+        .setting-row input, .setting-row select {
+            width: 120px;
+            padding: 5px 8px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 13px;
+        }
+
+        /* Buttons */
+        .btn {
+            width: 100%;
+            padding: 10px;
+            border: none;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            margin-bottom: 6px;
+        }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn-primary { background: #0066cc; color: white; }
+        .btn-primary:hover:not(:disabled) { background: #004999; }
+        .btn-warning { background: #ff9800; color: white; }
+        .btn-warning:hover:not(:disabled) { background: #e68900; }
+        .btn-danger { background: #f44336; color: white; }
+        .btn-danger:hover:not(:disabled) { background: #d32f2f; }
+        .btn-success { background: #4caf50; color: white; }
+        .btn-success:hover:not(:disabled) { background: #388e3c; }
+        .btn-outline {
+            background: white;
+            color: #0066cc;
+            border: 1px solid #0066cc;
+        }
+        .btn-outline:hover:not(:disabled) { background: #f0f7ff; }
+
+        /* Progress */
+        .progress-bar-container {
+            background: #e0e0e0;
+            border-radius: 10px;
+            height: 20px;
+            overflow: hidden;
+            margin-bottom: 8px;
+        }
+        .progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #0066cc, #4caf50);
+            border-radius: 10px;
+            transition: width 0.5s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            color: white;
+            font-weight: 600;
+        }
+        .progress-info {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 4px;
+        }
+        .progress-detail {
+            font-size: 11px;
+            color: #888;
+            margin-top: 4px;
+        }
+
+        /* Results list */
+        .results-list {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .result-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 0;
+            border-bottom: 1px solid #eee;
+            font-size: 12px;
+        }
+        .result-item:last-child { border-bottom: none; }
+        .result-icon { font-size: 14px; flex-shrink: 0; }
+        .result-info { flex: 1; min-width: 0; }
+        .result-symptom { color: #333; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .result-scores { font-size: 10px; color: #888; }
+        .verdict-badge {
+            font-size: 10px;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-weight: 600;
+            flex-shrink: 0;
+        }
+        .verdict-pass { background: #e8f5e9; color: #2e7d32; }
+        .verdict-warn { background: #fff3e0; color: #e65100; }
+        .verdict-fail { background: #ffebee; color: #c62828; }
+        .verdict-error { background: #f3e5f5; color: #7b1fa2; }
+        .verdict-pending { background: #e3f2fd; color: #1565c0; }
+
+        /* Summary stats */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+        .stat-card {
+            background: white;
+            border-radius: 8px;
+            padding: 10px;
+            text-align: center;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+        }
+        .stat-value { font-size: 20px; font-weight: 700; }
+        .stat-label { font-size: 10px; color: #888; margin-top: 2px; }
+        .stat-pass .stat-value { color: #2e7d32; }
+        .stat-fail .stat-value { color: #c62828; }
+        .stat-warn .stat-value { color: #e65100; }
+        .stat-total .stat-value { color: #0066cc; }
+
+        /* Export buttons */
+        .export-section { display: none; }
+        .export-section.show { display: block; }
+
+        /* Typing indicator */
+        .typing { align-self: flex-start; background: white; padding: 10px 18px; border-radius: 16px; border-bottom-left-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); display: none; }
+        .typing.show { display: block; }
+        .typing span { display: inline-block; width: 6px; height: 6px; background: #bbb; border-radius: 50%; margin: 0 2px; animation: bounce 1.4s infinite; }
+        .typing span:nth-child(2) { animation-delay: 0.2s; }
+        .typing span:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes bounce { 0%, 60%, 100% { transform: translateY(0); } 30% { transform: translateY(-4px); } }
+
+        /* Scrollbar */
+        .chat-container::-webkit-scrollbar, .control-panel::-webkit-scrollbar, .results-list::-webkit-scrollbar {
+            width: 6px;
+        }
+        .chat-container::-webkit-scrollbar-thumb, .control-panel::-webkit-scrollbar-thumb, .results-list::-webkit-scrollbar-thumb {
+            background: #ccc;
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="nav">
+        <span class="nav-brand">Compass Vitals</span>
+        <a href="/">Chat V1</a>
+        <a href="/chat-v2">Chat V2</a>
+        <a href="/auto-test" class="active">Auto Test</a>
+        <a href="/log-auto-test">Test Logs</a>
+        <a href="/dashboard">Dashboard</a>
+        <a href="/logs">Logs</a>
+        <a href="/history">History</a>
+    </div>
+
+    <div class="header">
+        <div class="header-icon">&#9881;</div>
+        <div class="header-info">
+            <h1>Auto Test Panel</h1>
+            <p>T&#7921; &#273;&#7897;ng ki&#7875;m th&#7917; AI Doctor Agent</p>
+        </div>
+    </div>
+
+    <div class="main-layout">
+        <!-- LEFT: Chat Display -->
+        <div class="chat-panel">
+            <div class="chat-header">
+                <span class="case-info" id="chatCaseInfo">Ch&#432;a b&#7855;t &#273;&#7847;u</span>
+                <span id="chatTurnInfo"></span>
+            </div>
+            <div class="chat-container" id="chatContainer">
+                <div class="chat-placeholder" id="chatPlaceholder">
+                    Nh&#7845;n "Sinh k&#7883;ch b&#7843;n" r&#7891;i "B&#7855;t &#273;&#7847;u" &#273;&#7875; ch&#7841;y auto test.<br>
+                    H&#7897;i tho&#7841;i s&#7869; hi&#7875;n th&#7883; t&#7841;i &#273;&#226;y.
+                </div>
+                <div class="typing" id="typing"><span></span><span></span><span></span></div>
+            </div>
+        </div>
+
+        <!-- RIGHT: Control Panel -->
+        <div class="control-panel">
+            <!-- Settings -->
+            <div class="panel-section">
+                <h3>Th&#244;ng s&#7889; test</h3>
+                <div class="setting-row">
+                    <label>S&#7889; k&#7883;ch b&#7843;n</label>
+                    <input type="number" id="caseCount" value="5" min="1" max="20" />
+                </div>
+                <div class="setting-row">
+                    <label>Ch&#7911; &#273;&#7873; b&#7879;nh</label>
+                    <select id="topicFilter">
+                        <option value="all">T&#7845;t c&#7843; (&#273;a d&#7841;ng)</option>
+                        <option value="sot">S&#7889;t</option>
+                        <option value="dau_nguc">&#272;au ng&#7921;c / Tim m&#7841;ch</option>
+                        <option value="kho_tho">Kh&#243; th&#7903; / H&#244; h&#7845;p</option>
+                        <option value="dau_bung">&#272;au b&#7909;ng / Ti&#234;u h&#243;a</option>
+                        <option value="dau_dau">&#272;au &#273;&#7847;u / Th&#7847;n kinh</option>
+                        <option value="chan_thuong">Ch&#7845;n th&#432;&#417;ng / Tai n&#7841;n</option>
+                        <option value="tam_than">T&#226;m th&#7847;n / T&#7921; t&#7917;</option>
+                        <option value="tiet_nieu">Ti&#7871;t ni&#7879;u / Ph&#7909; khoa</option>
+                        <option value="da_lieu">Da li&#7877;u / D&#7883; &#7913;ng</option>
+                        <option value="co_xuong_khop">C&#417; x&#432;&#417;ng kh&#7899;p</option>
+                    </select>
+                </div>
+                <div class="setting-row">
+                    <label>M&#7913;c &#273;&#7897;</label>
+                    <select id="severityFilter">
+                        <option value="all">T&#7845;t c&#7843;</option>
+                        <option value="low">Low</option>
+                        <option value="medium">Medium</option>
+                        <option value="high">High</option>
+                        <option value="critical">Critical</option>
+                    </select>
+                </div>
+                <div class="setting-row">
+                    <label>T&#7889;c &#273;&#7897;</label>
+                    <select id="speedSetting">
+                        <option value="500">Nhanh (0.5s)</option>
+                        <option value="1500" selected>B&#236;nh th&#432;&#7901;ng (1.5s)</option>
+                        <option value="3000">Ch&#7853;m (3s)</option>
+                    </select>
+                </div>
+                <div style="margin-top:10px">
+                    <label style="font-size:13px;color:#333;display:block;margin-bottom:6px">File k&#7883;ch b&#7843;n (.md)</label>
+                    <input type="file" id="scenarioFile" accept=".md,.txt" style="font-size:12px;width:100%" />
+                    <div id="fileStatus" style="font-size:11px;color:#888;margin-top:4px"></div>
+                </div>
+            </div>
+
+            <!-- Controls -->
+            <div class="panel-section">
+                <h3>&#272;i&#7873;u khi&#7875;n</h3>
+                <button class="btn btn-outline" id="btnGenerate" onclick="generateScenarios()">Sinh k&#7883;ch b&#7843;n</button>
+                <button class="btn btn-primary" id="btnStart" onclick="startAutoTest()" disabled>B&#7855;t &#273;&#7847;u Auto Test</button>
+                <button class="btn btn-warning" id="btnPause" onclick="togglePause()" disabled style="display:none">T&#7841;m d&#7915;ng</button>
+                <button class="btn btn-danger" id="btnStop" onclick="stopTest()" disabled style="display:none">D&#7915;ng</button>
+            </div>
+
+            <!-- Progress -->
+            <div class="panel-section" id="progressSection" style="display:none">
+                <h3>Ti&#7871;n tr&#236;nh</h3>
+                <div class="progress-bar-container">
+                    <div class="progress-bar" id="progressBar" style="width:0%">0%</div>
+                </div>
+                <div class="progress-info" id="progressInfo">&#272;ang chu&#7849;n b&#7883;...</div>
+                <div class="progress-detail" id="progressDetail"></div>
+            </div>
+
+            <!-- Results -->
+            <div class="panel-section" id="resultsSection" style="display:none">
+                <h3>K&#7871;t qu&#7843;</h3>
+                <div class="stats-grid" id="statsGrid">
+                    <div class="stat-card stat-total"><div class="stat-value" id="statTotal">0</div><div class="stat-label">T&#7893;ng</div></div>
+                    <div class="stat-card stat-pass"><div class="stat-value" id="statPass">0</div><div class="stat-label">PASS</div></div>
+                    <div class="stat-card stat-warn"><div class="stat-value" id="statWarn">0</div><div class="stat-label">C&#7846;N C&#7842;I THI&#7878;N</div></div>
+                    <div class="stat-card stat-fail"><div class="stat-value" id="statFail">0</div><div class="stat-label">FAIL</div></div>
+                </div>
+                <div style="margin-top: 12px">
+                    <div class="results-list" id="resultsList"></div>
+                </div>
+            </div>
+
+            <!-- Save status -->
+            <div class="panel-section export-section" id="exportSection">
+                <div id="saveStatus" style="font-size:12px;color:#2e7d32;margin-bottom:8px"></div>
+                <a class="btn btn-outline" href="/log-auto-test" target="_blank">Xem Log Dashboard</a>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ===== STATE =====
+        let scenarios = [];
+        let results = [];
+        let testRunId = '';
+        let isRunning = false;
+        let isPaused = false;
+        let isStopped = false;
+        let scenarioFileContent = ''; // nội dung file .md kịch bản
+
+        // ===== FILE UPLOAD =====
+        document.getElementById('scenarioFile').addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            const status = document.getElementById('fileStatus');
+            if (!file) { scenarioFileContent = ''; status.textContent = ''; return; }
+            scenarioFileContent = await file.text();
+            const lines = scenarioFileContent.split('\n').filter(l => l.trim()).length;
+            status.textContent = `\u2713 ${file.name} (${lines} d\u00F2ng)`;
+            status.style.color = '#2e7d32';
+        });
+
+        // ===== ELEMENTS =====
+        const chatContainer = document.getElementById('chatContainer');
+        const chatPlaceholder = document.getElementById('chatPlaceholder');
+        const chatCaseInfo = document.getElementById('chatCaseInfo');
+        const chatTurnInfo = document.getElementById('chatTurnInfo');
+        const typingEl = document.getElementById('typing');
+        const progressSection = document.getElementById('progressSection');
+        const progressBar = document.getElementById('progressBar');
+        const progressInfo = document.getElementById('progressInfo');
+        const progressDetail = document.getElementById('progressDetail');
+        const resultsSection = document.getElementById('resultsSection');
+        const resultsList = document.getElementById('resultsList');
+        const exportSection = document.getElementById('exportSection');
+        const btnGenerate = document.getElementById('btnGenerate');
+        const btnStart = document.getElementById('btnStart');
+        const btnPause = document.getElementById('btnPause');
+        const btnStop = document.getElementById('btnStop');
+
+        // ===== HELPERS =====
+        function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+        function getSpeed() { return parseInt(document.getElementById('speedSetting').value); }
+        const SAFETY_MAX_TURNS = 30; // hard limit phòng loop vô tận
+
+        function clearChat() {
+            chatContainer.querySelectorAll('.message').forEach(m => m.remove());
+            chatPlaceholder.style.display = 'none';
+        }
+
+        function addChatMessage(text, role) {
+            chatPlaceholder.style.display = 'none';
+            const div = document.createElement('div');
+            div.className = `message ${role}`;
+            const label = document.createElement('div');
+            label.className = `msg-label ${role}-label`;
+            label.textContent = role === 'agent' ? 'AI Doctor' : 'B\u1EC7nh nh\u00E2n';
+            div.appendChild(label);
+            const content = document.createElement('div');
+            content.textContent = text;
+            div.appendChild(content);
+            chatContainer.insertBefore(div, typingEl);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        function addSystemMsg(text) {
+            const div = document.createElement('div');
+            div.className = 'message system-msg';
+            div.textContent = text;
+            chatContainer.insertBefore(div, typingEl);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        function showTyping(show) {
+            typingEl.classList.toggle('show', show);
+            if (show) chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        function updateProgress(current, total, scenario) {
+            const pct = Math.round((current / total) * 100);
+            progressBar.style.width = pct + '%';
+            progressBar.textContent = pct + '%';
+            progressInfo.textContent = `Case ${current}/${total}`;
+            if (scenario) {
+                progressDetail.textContent = `Tri\u1EC7u ch\u1EE9ng: ${scenario.primary_symptom} | ${scenario.severity}`;
+            }
+        }
+
+        function updateStats() {
+            const total = results.length;
+            const passed = results.filter(r => r.evaluation?.final_verdict === 'PASS').length;
+            const warned = results.filter(r => r.evaluation?.final_verdict === 'NEEDS_IMPROVEMENT').length;
+            const failed = results.filter(r => r.evaluation?.final_verdict === 'FAIL' || r.status === 'ERROR').length;
+            document.getElementById('statTotal').textContent = total;
+            document.getElementById('statPass').textContent = passed;
+            document.getElementById('statWarn').textContent = warned;
+            document.getElementById('statFail').textContent = failed;
+        }
+
+        function addResultItem(index, scenario, evaluation, status) {
+            resultsSection.style.display = 'block';
+            const div = document.createElement('div');
+            div.className = 'result-item';
+
+            let icon, badgeClass, badgeText;
+            if (status === 'ERROR') {
+                icon = '\u26A0\uFE0F'; badgeClass = 'verdict-error'; badgeText = 'ERROR';
+            } else if (evaluation.final_verdict === 'PASS') {
+                icon = '\u2705'; badgeClass = 'verdict-pass'; badgeText = 'PASS';
+            } else if (evaluation.final_verdict === 'NEEDS_IMPROVEMENT') {
+                icon = '\u26A0\uFE0F'; badgeClass = 'verdict-warn'; badgeText = 'C\u1EA6N C\u1EA2I THI\u1EC6N';
+            } else {
+                icon = '\u274C'; badgeClass = 'verdict-fail'; badgeText = 'FAIL';
+            }
+
+            div.innerHTML = `
+                <span class="result-icon">${icon}</span>
+                <div class="result-info">
+                    <div class="result-symptom">Case ${index + 1}: ${scenario.primary_symptom}</div>
+                    <div class="result-scores">${status === 'ERROR' ? 'L\u1ED7i x\u1EED l\u00FD' :
+                        `An to\u00E0n: ${evaluation.safety_detection} | B\u1EC7nh s\u1EED: ${evaluation.history_completeness}/5 | L\u00E2m s\u00E0ng: ${evaluation.clinical_advice_quality}/5 | Giao ti\u1EBFp: ${evaluation.empathy_communication}/3`
+                    }</div>
+                </div>
+                <span class="verdict-badge ${badgeClass}">${badgeText}</span>
+            `;
+            resultsList.appendChild(div);
+            updateStats();
+        }
+
+        function addPendingItem(index, scenario) {
+            resultsSection.style.display = 'block';
+            const div = document.createElement('div');
+            div.className = 'result-item';
+            div.id = `pending-${index}`;
+            div.innerHTML = `
+                <span class="result-icon">\u23F3</span>
+                <div class="result-info">
+                    <div class="result-symptom">Case ${index + 1}: ${scenario.primary_symptom}</div>
+                    <div class="result-scores">Ch\u1EDD...</div>
+                </div>
+                <span class="verdict-badge verdict-pending">CH\u1ECC</span>
+            `;
+            resultsList.appendChild(div);
+        }
+
+        function removePendingItem(index) {
+            const el = document.getElementById(`pending-${index}`);
+            if (el) el.remove();
+        }
+
+        function setControlState(state) {
+            // states: idle, generating, ready, running, paused, done
+            btnGenerate.disabled = (state !== 'idle' && state !== 'done');
+            btnStart.disabled = (state !== 'ready');
+            btnPause.style.display = (state === 'running' || state === 'paused') ? 'block' : 'none';
+            btnPause.disabled = false;
+            btnPause.textContent = state === 'paused' ? 'Ti\u1EBFp t\u1EE5c' : 'T\u1EA1m d\u1EEBng';
+            btnStop.style.display = (state === 'running' || state === 'paused') ? 'block' : 'none';
+            btnStop.disabled = false;
+            if (state === 'generating') {
+                btnGenerate.textContent = '\u0110ang sinh...';
+                btnGenerate.disabled = true;
+            } else {
+                btnGenerate.textContent = 'Sinh k\u1ECBch b\u1EA3n';
+            }
+        }
+
+        // ===== API CALLS =====
+        async function apiPost(url, body) {
+            const res = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body),
+            });
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.detail || err.error?.message || `HTTP ${res.status}`);
+            }
+            return res.json();
+        }
+
+        // ===== GENERATE SCENARIOS =====
+        async function generateScenarios() {
+            const count = parseInt(document.getElementById('caseCount').value) || 5;
+            const severity = document.getElementById('severityFilter').value;
+            const topic = document.getElementById('topicFilter').value;
+            setControlState('generating');
+            resultsList.innerHTML = '';
+            results = [];
+            scenarios = [];
+
+            try {
+                const payload = { count: count, severity_filter: severity, topic: topic };
+                if (scenarioFileContent) payload.reference_content = scenarioFileContent;
+                const data = await apiPost('/api/v1/auto-test/generate-scenarios', payload);
+                scenarios = data.scenarios;
+                // Show pending items
+                scenarios.forEach((s, i) => addPendingItem(i, s));
+                updateStats();
+                setControlState('ready');
+                addSystemMsg(`\u0110\u00E3 sinh ${scenarios.length} k\u1ECBch b\u1EA3n. Nh\u1EA5n "B\u1EAFt \u0111\u1EA7u" \u0111\u1EC3 ch\u1EA1y.`);
+            } catch (err) {
+                addSystemMsg(`L\u1ED7i sinh k\u1ECBch b\u1EA3n: ${err.message}`);
+                setControlState('idle');
+            }
+        }
+
+        // ===== START AUTO TEST =====
+        async function startAutoTest() {
+            if (!scenarios.length) return;
+
+            isRunning = true;
+            isPaused = false;
+            isStopped = false;
+            results = [];
+            resultsList.innerHTML = '';
+            scenarios.forEach((s, i) => addPendingItem(i, s));
+            updateStats();
+
+            testRunId = 'TEST_' + new Date().toISOString().replace(/[-:T]/g, '').substring(0, 14);
+            progressSection.style.display = 'block';
+            exportSection.classList.remove('show');
+            setControlState('running');
+
+            const speed = getSpeed();
+            const maxTurns = SAFETY_MAX_TURNS;
+
+            for (let i = 0; i < scenarios.length; i++) {
+                if (isStopped) break;
+                while (isPaused) await sleep(200);
+
+                const scenario = scenarios[i];
+                clearChat();
+                chatCaseInfo.textContent = `Case ${i + 1}/${scenarios.length}: ${scenario.primary_symptom}`;
+                chatTurnInfo.textContent = '';
+                updateProgress(i + 1, scenarios.length, scenario);
+
+                try {
+                    const caseResult = await runSingleCase(scenario, i, speed, maxTurns);
+                    removePendingItem(i);
+                    results.push(caseResult);
+                    addResultItem(i, scenario, caseResult.evaluation, 'OK');
+                } catch (err) {
+                    removePendingItem(i);
+                    const errorResult = {
+                        case_number: i + 1,
+                        scenario: scenario,
+                        evaluation: { final_verdict: 'FAIL', safety_detection: 'N/A', recommendation: err.message },
+                        status: 'ERROR',
+                    };
+                    results.push(errorResult);
+                    addResultItem(i, scenario, errorResult.evaluation, 'ERROR');
+                    addSystemMsg(`L\u1ED7i Case ${i + 1}: ${err.message}`);
+                }
+            }
+
+            isRunning = false;
+            chatCaseInfo.textContent = `Ho\u00E0n th\u00E0nh ${results.length}/${scenarios.length} cases`;
+            chatTurnInfo.textContent = '';
+            setControlState('done');
+            exportSection.classList.add('show');
+            updateProgress(scenarios.length, scenarios.length, null);
+            progressInfo.textContent = 'Ho\u00E0n th\u00E0nh!';
+
+            // Tự động lưu kết quả
+            await saveResults();
+        }
+
+        // ===== RUN SINGLE CASE =====
+        async function runSingleCase(scenario, index, speed, maxTurns) {
+            const conversationHistory = [];
+
+            // 1. Create new session -> greeting
+            showTyping(true);
+            const greetingData = await apiPost('/api/v1/chat-v2', { message: '', language: 'auto' });
+            showTyping(false);
+            const sessionId = greetingData.session_id;
+            addChatMessage(greetingData.response, 'agent');
+            conversationHistory.push({ role: 'agent', content: greetingData.response });
+
+            await sleep(speed);
+
+            // 2. Get first patient message
+            let patientData = await apiPost('/api/v1/auto-test/patient-respond', {
+                scenario: scenario,
+                conversation_history: [],
+                agent_message: greetingData.response,
+                reference_content: scenarioFileContent,
+            });
+
+            // 3. Conversation loop
+            let turnCount = 0;
+            while (turnCount < maxTurns && !patientData.should_end && !isStopped) {
+                while (isPaused) await sleep(200);
+                turnCount++;
+                chatTurnInfo.textContent = `Turn ${turnCount}/${maxTurns}`;
+
+                // Patient message
+                addChatMessage(patientData.patient_message, 'patient');
+                conversationHistory.push({ role: 'patient', content: patientData.patient_message });
+
+                await sleep(speed);
+
+                // Agent response
+                showTyping(true);
+                const agentData = await apiPost('/api/v1/chat-v2', {
+                    message: patientData.patient_message,
+                    session_id: sessionId,
+                    language: 'auto',
+                });
+                showTyping(false);
+
+                addChatMessage(agentData.response, 'agent');
+                conversationHistory.push({ role: 'agent', content: agentData.response });
+
+                // Check end conditions
+                if (agentData.is_complete || agentData.is_emergency) {
+                    if (agentData.is_emergency) {
+                        addSystemMsg('Agent \u0111\u00E3 c\u1EA3nh b\u00E1o c\u1EA5p c\u1EE9u.');
+                    }
+                    break;
+                }
+
+                await sleep(speed);
+
+                // Get next patient response
+                patientData = await apiPost('/api/v1/auto-test/patient-respond', {
+                    scenario: scenario,
+                    conversation_history: conversationHistory,
+                    agent_message: agentData.response,
+                    reference_content: scenarioFileContent,
+                });
+
+                if (patientData.should_end) {
+                    addChatMessage(patientData.patient_message, 'patient');
+                    conversationHistory.push({ role: 'patient', content: patientData.patient_message });
+                }
+            }
+
+            addSystemMsg(`K\u1EBFt th\u00FAc case - ${turnCount} turns. \u0110ang \u0111\u00E1nh gi\u00E1...`);
+
+            // 4. Evaluate
+            showTyping(true);
+            const evalData = await apiPost('/api/v1/auto-test/evaluate', {
+                scenario: scenario,
+                conversation_history: conversationHistory,
+                reference_content: scenarioFileContent,
+            });
+            showTyping(false);
+
+            const evaluation = evalData.result;
+            addSystemMsg(`K\u1EBFt qu\u1EA3: ${evaluation.final_verdict} | An to\u00E0n: ${evaluation.safety_detection} | B\u1EC7nh s\u1EED: ${evaluation.history_completeness}/5 | L\u00E2m s\u00E0ng: ${evaluation.clinical_advice_quality}/5`);
+
+            return {
+                case_number: index + 1,
+                scenario: scenario,
+                evaluation: evaluation,
+                conversation_history: conversationHistory,
+                turn_count: turnCount,
+                session_id: sessionId,
+            };
+        }
+
+        // ===== PAUSE / STOP =====
+        function togglePause() {
+            isPaused = !isPaused;
+            setControlState(isPaused ? 'paused' : 'running');
+        }
+
+        function stopTest() {
+            isStopped = true;
+            isRunning = false;
+            setControlState('done');
+            exportSection.classList.add('show');
+            addSystemMsg('Test \u0111\u00E3 d\u1EEBng.');
+        }
+
+        // ===== EXPORT =====
+        function buildExportPayload() {
+            const total = results.length;
+            const passed = results.filter(r => r.evaluation?.final_verdict === 'PASS').length;
+            const needsImprovement = results.filter(r => r.evaluation?.final_verdict === 'NEEDS_IMPROVEMENT').length;
+            const failed = total - passed - needsImprovement;
+            const safetyPass = results.filter(r => r.evaluation?.safety_detection === 'PASS').length;
+            const safetyFail = total - safetyPass;
+
+            const historyScores = results.filter(r => r.evaluation?.history_completeness).map(r => r.evaluation.history_completeness);
+            const adviceScores = results.filter(r => r.evaluation?.clinical_advice_quality).map(r => r.evaluation.clinical_advice_quality);
+            const empathyScores = results.filter(r => r.evaluation?.empathy_communication).map(r => r.evaluation.empathy_communication);
+            const avg = arr => arr.length ? (arr.reduce((a, b) => a + b, 0) / arr.length).toFixed(1) : 'N/A';
+
+            return {
+                test_run_id: testRunId,
+                timestamp: new Date().toLocaleString('vi-VN'),
+                summary: {
+                    total_cases: total,
+                    passed: passed,
+                    needs_improvement: needsImprovement,
+                    failed: failed,
+                    pass_rate: total ? Math.round(passed / total * 100) + '%' : '0%',
+                    safety_pass: safetyPass,
+                    safety_fail: safetyFail,
+                    avg_history_score: avg(historyScores),
+                    avg_advice_score: avg(adviceScores),
+                    avg_empathy_score: avg(empathyScores),
+                },
+                results: results.map(r => ({
+                    case_number: r.case_number,
+                    scenario: r.scenario,
+                    evaluation: r.evaluation,
+                    conversation_history: r.conversation_history || [],
+                })),
+                failed_cases_summary: results
+                    .filter(r => r.evaluation?.final_verdict !== 'PASS')
+                    .map(r => ({
+                        case_number: r.case_number,
+                        symptom: r.scenario?.primary_symptom || '',
+                        verdict: r.evaluation?.final_verdict || 'ERROR',
+                        safety_comment: r.evaluation?.safety_comment || '',
+                        recommendation: r.evaluation?.recommendation || '',
+                    })),
+            };
+        }
+
+        async function saveResults() {
+            try {
+                const payload = buildExportPayload();
+                await apiPost('/api/v1/auto-test/save-run', payload);
+                document.getElementById('saveStatus').textContent =
+                    '\u2713 \u0110\u00E3 l\u01B0u k\u1EBFt qu\u1EA3: ' + testRunId;
+            } catch (err) {
+                document.getElementById('saveStatus').textContent =
+                    'L\u1ED7i l\u01B0u: ' + err.message;
+                document.getElementById('saveStatus').style.color = '#c62828';
+            }
+        }
+
+        // Init
+        setControlState('idle');
+    </script>
+</body>
+</html>

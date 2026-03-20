@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Compass Vitals — Auto Test Logs</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f0f2f5; min-height: 100vh; }
+
+        .nav { background: #1a1a2e; padding: 8px 24px; display: flex; gap: 16px; align-items: center; }
+        .nav a { color: #aaa; text-decoration: none; font-size: 13px; padding: 4px 12px; border-radius: 4px; }
+        .nav a:hover, .nav a.active { color: white; background: rgba(255,255,255,0.1); }
+        .nav-brand { color: white; font-weight: 700; font-size: 14px; margin-right: 16px; }
+
+        .header { background: linear-gradient(135deg, #0066cc, #004999); color: white; padding: 14px 24px; display: flex; align-items: center; gap: 12px; }
+        .header-icon { width: 36px; height: 36px; background: rgba(255,255,255,0.2); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 18px; }
+        .header-info h1 { font-size: 16px; font-weight: 600; }
+        .header-info p { font-size: 11px; opacity: 0.85; }
+
+        .content { max-width: 1200px; margin: 20px auto; padding: 0 20px; }
+
+        /* Run list */
+        .run-card { background: white; border-radius: 10px; padding: 16px 20px; margin-bottom: 12px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); cursor: pointer; transition: all 0.2s; display: flex; align-items: center; gap: 16px; }
+        .run-card:hover { box-shadow: 0 3px 12px rgba(0,0,0,0.12); transform: translateY(-1px); }
+        .run-card.active { border-left: 4px solid #0066cc; }
+        .run-id { font-weight: 600; font-size: 14px; color: #333; }
+        .run-time { font-size: 12px; color: #888; }
+        .run-stats { margin-left: auto; display: flex; gap: 12px; align-items: center; }
+        .run-stat { text-align: center; }
+        .run-stat-val { font-size: 16px; font-weight: 700; }
+        .run-stat-label { font-size: 10px; color: #888; }
+        .pass-color { color: #2e7d32; }
+        .fail-color { color: #c62828; }
+        .warn-color { color: #e65100; }
+        .run-rate { font-size: 18px; font-weight: 700; padding: 4px 12px; border-radius: 8px; }
+        .rate-good { background: #e8f5e9; color: #2e7d32; }
+        .rate-ok { background: #fff3e0; color: #e65100; }
+        .rate-bad { background: #ffebee; color: #c62828; }
+        .run-delete { background: none; border: none; color: #ccc; cursor: pointer; font-size: 16px; padding: 4px 8px; }
+        .run-delete:hover { color: #c62828; }
+
+        /* Detail view */
+        .detail-panel { display: none; background: white; border-radius: 10px; margin-top: 16px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+        .detail-panel.show { display: block; }
+        .detail-header { padding: 16px 20px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; }
+        .detail-header h2 { font-size: 15px; color: #333; }
+        .detail-close { background: none; border: none; font-size: 18px; cursor: pointer; color: #888; }
+        .detail-close:hover { color: #333; }
+
+        /* Case table */
+        .case-table { width: 100%; border-collapse: collapse; }
+        .case-table th { background: #f5f5f5; padding: 10px 14px; text-align: left; font-size: 12px; color: #666; border-bottom: 2px solid #e0e0e0; }
+        .case-table td { padding: 10px 14px; font-size: 13px; border-bottom: 1px solid #f0f0f0; }
+        .case-table tr { cursor: pointer; transition: background 0.15s; }
+        .case-table tbody tr:hover { background: #f8f9ff; }
+        .case-table tr.selected { background: #e3f2fd; }
+        .verdict-badge { font-size: 11px; padding: 3px 10px; border-radius: 10px; font-weight: 600; }
+        .verdict-pass { background: #e8f5e9; color: #2e7d32; }
+        .verdict-warn { background: #fff3e0; color: #e65100; }
+        .verdict-fail { background: #ffebee; color: #c62828; }
+
+        /* Chat panel */
+        .chat-detail { display: none; border-top: 2px solid #0066cc; padding: 16px 20px; background: #fafafa; }
+        .chat-detail.show { display: block; }
+        .chat-detail-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+        .chat-detail-header h3 { font-size: 14px; color: #333; }
+        .chat-messages { max-height: 500px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding: 8px 0; }
+        .chat-msg { max-width: 80%; padding: 8px 12px; border-radius: 14px; font-size: 13px; line-height: 1.5; }
+        .chat-msg.agent { align-self: flex-start; background: white; border: 1px solid #e0e0e0; border-bottom-left-radius: 4px; }
+        .chat-msg.patient { align-self: flex-end; background: #0066cc; color: white; border-bottom-right-radius: 4px; }
+        .chat-msg-label { font-size: 10px; font-weight: 600; margin-bottom: 2px; opacity: 0.7; }
+        .eval-box { background: white; border: 1px solid #e0e0e0; border-radius: 8px; padding: 12px; margin-top: 12px; }
+        .eval-box h4 { font-size: 13px; color: #333; margin-bottom: 8px; }
+        .eval-row { display: flex; gap: 16px; flex-wrap: wrap; font-size: 12px; color: #666; }
+        .eval-item { background: #f5f5f5; padding: 4px 10px; border-radius: 6px; }
+        .eval-recommend { margin-top: 8px; font-size: 12px; color: #555; font-style: italic; }
+
+        .empty-state { text-align: center; padding: 60px 20px; color: #999; }
+        .empty-state h3 { color: #666; margin-bottom: 8px; }
+    </style>
+</head>
+<body>
+    <div class="nav">
+        <span class="nav-brand">Compass Vitals</span>
+        <a href="/">Chat V1</a>
+        <a href="/chat-v2">Chat V2</a>
+        <a href="/auto-test">Auto Test</a>
+        <a href="/log-auto-test" class="active">Test Logs</a>
+        <a href="/dashboard">Dashboard</a>
+        <a href="/logs">LLM Logs</a>
+        <a href="/history">History</a>
+    </div>
+
+    <div class="header">
+        <div class="header-icon">&#128203;</div>
+        <div class="header-info">
+            <h1>Auto Test Logs</h1>
+            <p>L&#7883;ch s&#7917; v&#224; k&#7871;t qu&#7843; t&#7845;t c&#7843; c&#225;c l&#7847;n ch&#7841;y auto test</p>
+        </div>
+    </div>
+
+    <div class="content">
+        <div id="runList"></div>
+        <div class="detail-panel" id="detailPanel">
+            <div class="detail-header">
+                <h2 id="detailTitle">Chi ti&#7871;t</h2>
+                <button class="detail-close" onclick="closeDetail()">&times;</button>
+            </div>
+            <table class="case-table">
+                <thead>
+                    <tr>
+                        <th>Case</th>
+                        <th>Tri&#7879;u ch&#7913;ng</th>
+                        <th>Severity</th>
+                        <th>An to&#224;n</th>
+                        <th>Khai th&#225;c b&#7879;nh s&#7917;</th>
+                        <th>L&#7901;i khuy&#234;n LS</th>
+                        <th>Giao ti&#7871;p</th>
+                        <th>K&#7871;t lu&#7853;n</th>
+                    </tr>
+                </thead>
+                <tbody id="caseTableBody"></tbody>
+            </table>
+            <div class="chat-detail" id="chatDetail">
+                <div class="chat-detail-header">
+                    <h3 id="chatDetailTitle">N&#7897;i dung chat</h3>
+                </div>
+                <div class="eval-box" id="evalBox"></div>
+                <div class="chat-messages" id="chatMessages"></div>
+            </div>
+        </div>
+        <div class="empty-state" id="emptyState">
+            <h3>Ch&#432;a c&#243; d&#7919; li&#7879;u</h3>
+            <p>Ch&#7841;y Auto Test t&#7841;i <a href="/auto-test">/auto-test</a> &#273;&#7875; t&#7841;o k&#7871;t qu&#7843;.</p>
+        </div>
+    </div>
+
+    <script>
+        let currentRuns = [];
+        let currentRunData = null;
+
+        async function loadRuns() {
+            try {
+                const res = await fetch('/api/v1/auto-test/runs');
+                const data = await res.json();
+                currentRuns = data.runs || [];
+                renderRunList();
+            } catch (err) {
+                document.getElementById('runList').innerHTML =
+                    '<div style="color:#c62828;padding:20px">L\u1ED7i t\u1EA3i d\u1EEF li\u1EC7u: ' + err.message + '</div>';
+            }
+        }
+
+        function renderRunList() {
+            const container = document.getElementById('runList');
+            const empty = document.getElementById('emptyState');
+
+            if (!currentRuns.length) {
+                container.innerHTML = '';
+                empty.style.display = 'block';
+                return;
+            }
+            empty.style.display = 'none';
+
+            container.innerHTML = currentRuns.map(run => {
+                const s = run.summary || {};
+                const passed = s.passed || 0;
+                const failed = s.failed || 0;
+                const ni = s.needs_improvement || 0;
+                const total = run.total_cases || run.case_count || 0;
+                const rate = total ? Math.round(passed / total * 100) : 0;
+                const rateClass = rate >= 80 ? 'rate-good' : (rate >= 50 ? 'rate-ok' : 'rate-bad');
+
+                return `<div class="run-card" onclick="loadRunDetail('${run.test_run_id}')">
+                    <div>
+                        <div class="run-id">${run.test_run_id}</div>
+                        <div class="run-time">${run.timestamp}</div>
+                    </div>
+                    <div class="run-stats">
+                        <div class="run-stat"><div class="run-stat-val">${total}</div><div class="run-stat-label">Cases</div></div>
+                        <div class="run-stat"><div class="run-stat-val pass-color">${passed}</div><div class="run-stat-label">PASS</div></div>
+                        <div class="run-stat"><div class="run-stat-val warn-color">${ni}</div><div class="run-stat-label">C\u1EA7n c\u1EA3i thi\u1EC7n</div></div>
+                        <div class="run-stat"><div class="run-stat-val fail-color">${failed}</div><div class="run-stat-label">FAIL</div></div>
+                        <div class="run-rate ${rateClass}">${rate}%</div>
+                    </div>
+                    <button class="run-delete" onclick="event.stopPropagation();deleteRun('${run.test_run_id}')" title="X\u00F3a">&times;</button>
+                </div>`;
+            }).join('');
+        }
+
+        async function loadRunDetail(runId) {
+            try {
+                const res = await fetch(`/api/v1/auto-test/runs/${runId}`);
+                if (!res.ok) throw new Error('Not found');
+                currentRunData = await res.json();
+                renderDetail();
+            } catch (err) {
+                alert('L\u1ED7i: ' + err.message);
+            }
+        }
+
+        function renderDetail() {
+            const panel = document.getElementById('detailPanel');
+            const title = document.getElementById('detailTitle');
+            const tbody = document.getElementById('caseTableBody');
+
+            title.textContent = `${currentRunData.test_run_id} — ${currentRunData.timestamp}`;
+            panel.classList.add('show');
+            closeChatDetail();
+
+            tbody.innerHTML = currentRunData.results.map((r, i) => {
+                const s = r.scenario || {};
+                const e = r.evaluation || {};
+                const verdict = e.final_verdict || r.status || 'N/A';
+                let badgeClass = 'verdict-pass';
+                if (verdict === 'FAIL' || r.status === 'ERROR') badgeClass = 'verdict-fail';
+                else if (verdict === 'NEEDS_IMPROVEMENT') badgeClass = 'verdict-warn';
+
+                return `<tr onclick="showChat(${i})" ${i === 0 ? 'class="selected"' : ''}>
+                    <td>${r.case_number}</td>
+                    <td>${s.primary_symptom || ''}</td>
+                    <td>${s.severity || ''}</td>
+                    <td>${e.safety_detection || 'N/A'}</td>
+                    <td>${e.history_completeness || '-'}/5</td>
+                    <td>${e.clinical_advice_quality || '-'}/5</td>
+                    <td>${e.empathy_communication || '-'}/3</td>
+                    <td><span class="verdict-badge ${badgeClass}">${verdict}</span></td>
+                </tr>`;
+            }).join('');
+
+            // Auto show first case
+            if (currentRunData.results.length) showChat(0);
+
+            panel.scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function showChat(index) {
+            const result = currentRunData.results[index];
+            if (!result) return;
+
+            // Highlight row
+            document.querySelectorAll('.case-table tbody tr').forEach((tr, i) => {
+                tr.classList.toggle('selected', i === index);
+            });
+
+            const chatDetail = document.getElementById('chatDetail');
+            const chatTitle = document.getElementById('chatDetailTitle');
+            const chatMessages = document.getElementById('chatMessages');
+            const evalBox = document.getElementById('evalBox');
+
+            const s = result.scenario || {};
+            const e = result.evaluation || {};
+
+            chatTitle.textContent = `Case ${result.case_number}: ${s.primary_symptom || ''}`;
+
+            // Evaluation box
+            evalBox.innerHTML = `
+                <h4>\u0110\u00E1nh gi\u00E1 c\u1EE7a B\u00E1c s\u0129 Chuy\u00EAn khoa</h4>
+                <div class="eval-row">
+                    <span class="eval-item">An to\u00E0n: <b>${e.safety_detection || 'N/A'}</b></span>
+                    <span class="eval-item">Khai th\u00E1c b\u1EC7nh s\u1EED: <b>${e.history_completeness || '-'}/5</b></span>
+                    <span class="eval-item">L\u1EDDi khuy\u00EAn l\u00E2m s\u00E0ng: <b>${e.clinical_advice_quality || '-'}/5</b></span>
+                    <span class="eval-item">Giao ti\u1EBFp & \u0111\u1ED3ng c\u1EA3m: <b>${e.empathy_communication || '-'}/3</b></span>
+                    <span class="eval-item">Ng\u00F4n ng\u1EEF: <b>${e.language_grammar || '-'}/2</b></span>
+                    <span class="eval-item verdict-badge ${e.final_verdict === 'PASS' ? 'verdict-pass' : (e.final_verdict === 'NEEDS_IMPROVEMENT' ? 'verdict-warn' : 'verdict-fail')}">${e.final_verdict || 'N/A'}</span>
+                </div>
+                ${e.safety_comment ? `<div class="eval-recommend"><b>An to\u00E0n:</b> ${e.safety_comment}</div>` : ''}
+                ${e.recommendation ? `<div class="eval-recommend"><b>G\u1EE3i \u00FD:</b> ${e.recommendation}</div>` : ''}
+            `;
+
+            // Chat messages
+            const conversation = result.conversation_history || [];
+            chatMessages.innerHTML = conversation.map(msg => {
+                const isAgent = msg.role === 'agent';
+                return `<div class="chat-msg ${isAgent ? 'agent' : 'patient'}">
+                    <div class="chat-msg-label">${isAgent ? 'AI Doctor' : 'B\u1EC7nh nh\u00E2n'}</div>
+                    <div>${escapeHtml(msg.content)}</div>
+                </div>`;
+            }).join('');
+
+            chatDetail.classList.add('show');
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function closeDetail() {
+            document.getElementById('detailPanel').classList.remove('show');
+            closeChatDetail();
+        }
+
+        function closeChatDetail() {
+            document.getElementById('chatDetail').classList.remove('show');
+        }
+
+        async function deleteRun(runId) {
+            if (!confirm(`X\u00F3a test run ${runId}?`)) return;
+            try {
+                await fetch(`/api/v1/auto-test/runs/${runId}`, { method: 'DELETE' });
+                await loadRuns();
+                closeDetail();
+            } catch (err) {
+                alert('L\u1ED7i x\u00F3a: ' + err.message);
+            }
+        }
+
+        // Init
+        loadRuns();
+    </script>
+</body>
+</html>

@@ -31,7 +31,7 @@ async def lifespan(app: FastAPI):
     try:
         from app.db.engine import engine
         from app.domain.models.base import Base
-        from app.domain.models import agent_session  # noqa: F401 — register model
+        from app.domain.models import agent_session, auto_test_run  # noqa: F401 — register models
 
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
@@ -174,8 +174,20 @@ async def chat_v2_ui():
     return (STATIC_DIR / "chat-v2.html").read_text(encoding="utf-8")
 
 
+@app.get("/auto-test", response_class=HTMLResponse)
+async def auto_test_ui():
+    """Serve the Auto Test page."""
+    return (STATIC_DIR / "auto-test.html").read_text(encoding="utf-8")
+
+
+@app.get("/log-auto-test", response_class=HTMLResponse)
+async def log_auto_test_ui():
+    """Serve the Auto Test Logs dashboard."""
+    return (STATIC_DIR / "log-auto-test.html").read_text(encoding="utf-8")
+
+
 # Import and register routers after app creation to avoid circular imports
-from app.api.v1.routes import chat, chat_v2, flow, logs, patients, sessions, voice_ws  # noqa: E402
+from app.api.v1.routes import auto_test, chat, chat_v2, flow, logs, patients, sessions, voice_ws  # noqa: E402
 
 app.include_router(chat.router, prefix="/api/v1", tags=["chat"])
 app.include_router(chat_v2.router, prefix="/api/v1", tags=["chat-v2"])
@@ -184,3 +196,4 @@ app.include_router(voice_ws.router, prefix="/api/v1", tags=["voice"])
 app.include_router(logs.router, prefix="/api/v1", tags=["logs"])
 app.include_router(patients.router, prefix="/api/v1", tags=["patients"])
 app.include_router(sessions.router, prefix="/api/v1", tags=["sessions"])
+app.include_router(auto_test.router, prefix="/api/v1", tags=["auto-test"])

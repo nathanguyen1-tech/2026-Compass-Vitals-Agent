@@ -27,6 +27,7 @@ services:
 
   ai-agent:
     build: .
+    command: ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${SERVICE_PORT:-8008} --reload --reload-dir /app/app"]
     ports:
       - "${SERVICE_PORT:-8008}:${SERVICE_PORT:-8008}"
     env_file:
@@ -35,7 +36,7 @@ services:
       - PYTHONIOENCODING=utf-8
       - DATABASE_URL=postgresql+asyncpg://compass:compass_dev@postgres:5432/ai_agent_db
     volumes:
-      - ./app/static:/app/app/static
+      - ./app:/app/app
     depends_on:
       postgres:
         condition: service_healthy

@@ -19,6 +19,7 @@ from app.domain.models.patient_lifestyle import PatientLifestyle
 from app.domain.models.patient_vaccination import PatientVaccination
 from app.domain.models.patient_document import PatientDocument
 from app.domain.models.patient_screening import PatientScreening
+from app.domain.models.auto_test_run import AutoTestRun
 
 __all__ = [
     "Base",
@@ -40,4 +41,5 @@ __all__ = [
     "PatientVaccination",
     "PatientDocument",
     "PatientScreening",
+    "AutoTestRun",
 ]
