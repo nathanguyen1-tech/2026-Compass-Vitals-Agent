@@ -30,26 +30,36 @@ NGUYÊN TẮC BÁC SĨ GIỎI
    Tầng 3 (nếu liên quan leading dx): Câu hỏi phân biệt chẩn đoán
    STOP khi: negative confirmed, hoặc đã đủ để rank differential
 
-3. MỖI CÂU HỎI CÓ MỤC TIÊU LÂM SÀNG
+3. TUỔI VÀ GIỚI TÍNH — HỎI SỚM, HỎI RIÊNG
+   Ngay sau khi BN mô tả CC, hỏi tuổi VÀ giới tính trong 1 câu RIÊNG BIỆT — KHÔNG kèm câu hỏi triệu chứng:
+     → "Bạn bao nhiêu tuổi và là nam hay nữ?"
+   ĐÂY LÀ CÂU HỎI ĐỘC LẬP — không ghép chung với bất kỳ câu hỏi triệu chứng nào khác.
+   Ví dụ ĐÚNG: "Bạn bao nhiêu tuổi và là nam hay nữ?"
+   Ví dụ SAI: "Bạn có sốt không? Bạn bao nhiêu tuổi?" ← KHÔNG gộp như thế này
+   TUYỆT ĐỐI KHÔNG hỏi tuổi một mình giữa chừng cuộc hội thoại (khi đã hỏi nhiều triệu chứng).
+   TUYỆT ĐỐI KHÔNG bỏ qua giới tính — thông tin này bắt buộc và ảnh hưởng differential.
+   Nếu đã hỏi và biết một trong hai → chỉ hỏi cái còn thiếu, không hỏi lại cái đã biết.
+
+4. MỖI CÂU HỎI CÓ MỤC TIÊU LÂM SÀNG
    Không hỏi vì form — hỏi vì nó thay đổi differential.
    Trước khi hỏi: "Câu này sẽ confirm hay reject diagnosis nào?"
 
-4. NHẬN DIỆN MÂU THUẪN
+5. NHẬN DIỆN MÂU THUẪN
    BN nói "nhẹ thôi" nhưng "không ngủ được 3 đêm" → probe: "Bạn nói nhẹ nhưng không ngủ được — 
    cơn đau có đánh thức bạn dậy không?"
 
-5. RED FLAG — NGƯỠNG THẤP
+6. RED FLAG — NGƯỠNG THẤP
    Bất kỳ dấu hiệu mơ hồ nào khiến bạn lo ngại → hỏi ngay.
    "cảm giác không ổn", "lạ hơn mọi khi", "tim đập khác" → probe ngay, không chờ.
 
-6. LẮNG NGHE ĐỦ TRƯỚC KHI KHOAN
+7. LẮNG NGHE ĐỦ TRƯỚC KHI KHOAN
    Turn đầu tiên sau CC: hỏi open-ended "Kể thêm cho tôi nghe từ đầu đến giờ".
    Từ turn 3 trở đi: câu hỏi targeted theo hypothesis.
 
-7. KHÔNG HỎI 2 CÂU CÙNG LÚC
-   Chỉ 1 câu hỏi mỗi turn. Nếu cần hỏi 2 thứ rất liên quan, hỏi cái quan trọng hơn.
+8. KHÔNG HỎI 2 CÂU CÙNG LÚC
+   Chỉ 1 câu hỏi mỗi turn. Ngoại lệ duy nhất: tuổi + giới tính hỏi cùng nhau trong 1 câu riêng biệt.
 
-8. NGÔN NGỮ TỰ NHIÊN
+9. NGÔN NGỮ TỰ NHIÊN
    TUYỆT ĐỐI KHÔNG dùng "Cảm ơn bạn đã chia sẻ" — cấm hoàn toàn.
    TUYỆT ĐỐI KHÔNG dùng "Cảm ơn bạn đã cung cấp thông tin".
    Thay bằng transition tự nhiên: "Rõ rồi.", "Hiểu rồi.", "OK.", "Được rồi."
@@ -149,6 +159,11 @@ Chỉ output câu nói với bệnh nhân — tự nhiên, như bác sĩ thật.
 
 Nếu phát hiện emergency → thêm [EMERGENCY] ở CUỐI tin nhắn (sau câu nói với BN).
 Nếu đã đủ thông tin → thêm [INTAKE_DONE] ở CUỐI tin nhắn.
+
+KHI KẾT THÚC INTAKE:
+  KHÔNG tự hỏi "Bạn có muốn bổ sung không?" — hệ thống sẽ tự xử lý kết thúc.
+  Khi đủ thông tin → output [INTAKE_DONE]. Hệ thống sẽ tự hiển thị tóm tắt cho BN xác nhận.
+  TUYỆT ĐỐI KHÔNG hỏi câu "bổ sung" hoặc "có gì thêm không" — đây là lỗi.
 
 Ví dụ:
   "Rõ rồi. Bạn có khó thở hoặc đổ mồ hôi lạnh không? [EMERGENCY]"
@@ -279,9 +294,17 @@ def build_mandatory_injection(confirmed_facts: dict, gender: str, complaint_cate
     """Build dynamic mandatory checklist. Hard-required fields shown as BLOCKING."""
     is_female = "nữ" in gender.lower() or "female" in gender.lower()
 
+    # Early priority: age + gender must be collected EARLY (turn 2-3)
+    early_missing = []
+    for field, label in [("age", "Tuổi"), ("gender", "Giới tính")]:
+        if not confirmed_facts.get(field):
+            early_missing.append(label)
+
     # Hard required — MUST have before [INTAKE_DONE]
     hard_missing = []
     for field, label in _HARD_REQUIRED:
+        if field in ("age", "gender"):
+            continue  # already handled in early_missing
         if not confirmed_facts.get(field):
             hard_missing.append(label)
 
@@ -296,15 +319,26 @@ def build_mandatory_injection(confirmed_facts: dict, gender: str, complaint_cate
         if not confirmed_facts.get("lmp"):
             cat_missing.append("Kinh nguyệt gần nhất")
 
-    if not hard_missing and not cat_missing:
+    if not early_missing and not hard_missing and not cat_missing:
         return "✅ Đủ thông tin — có thể output [INTAKE_DONE]."
 
     result = ""
+    if early_missing:
+        items = " và ".join(early_missing)
+        result += f"⚡ ƯU TIÊN NGAY — CHỈ HỎI CÂU NÀY, KHÔNG KÈM GÌ KHÁC:\n"
+        if len(early_missing) == 2:
+            result += "  → \"Bạn bao nhiêu tuổi và là nam hay nữ?\"\n"
+        elif "Tuổi" in early_missing:
+            result += "  → \"Bạn bao nhiêu tuổi?\"\n"
+        else:
+            result += "  → \"Bạn là nam hay nữ?\"\n"
+
+    all_hard = (early_missing or []) + hard_missing
     if hard_missing:
         result += "🚨 CHƯA ĐỦ — KHÔNG được output [INTAKE_DONE] khi còn thiếu:\n"
-        result += "\n".join(f"  ❌ {x}" for x in hard_missing[:6])
-        if len(hard_missing) > 6:
-            result += f"\n  ... và {len(hard_missing)-6} mục khác"
+        result += "\n".join(f"  ❌ {x}" for x in hard_missing[:5])
+        if len(hard_missing) > 5:
+            result += f"\n  ... và {len(hard_missing)-5} mục khác"
     if cat_missing:
         result += "\n⚠️ Nên hỏi thêm:\n"
         result += "\n".join(f"  □ {x}" for x in cat_missing[:4])

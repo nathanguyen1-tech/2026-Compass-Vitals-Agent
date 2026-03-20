@@ -48,6 +48,14 @@ cultural_mapper = CulturalMapper()
 _EMERGENCY_MARKER = re.compile(r'\[EMERGENCY\]', re.IGNORECASE)
 _INTAKE_DONE_MARKER = re.compile(r'\[INTAKE_DONE\]', re.IGNORECASE)
 
+# Patient declining to add more (closing confirmation pattern)
+_NO_SUPPLEMENT_PATTERN = re.compile(
+    r'^(không|ko|k|no|nope|không có|không có gì|không bổ sung|'
+    r'không thêm|không có gì thêm|đủ rồi|xong|xong rồi|ok|okay|'
+    r'được rồi|vậy thôi|hết rồi|không muốn|không cần)\b',
+    re.IGNORECASE | re.UNICODE,
+)
+
 # Minimum turns before allowing INTAKE_DONE (prevent premature completion)
 MIN_TURNS_FOR_COMPLETION = 6
 
@@ -149,18 +157,22 @@ async def intake_node_v4(
             if any(kw in _last_ai_content for kw in keywords) and not confirmed_facts.get(field):
                 confirmed_facts[field] = "no"
 
-    # Context-aware: bare number after AI asks age
+    # Context-aware: bare number after AI asks age or severity
     _bare_number = re.fullmatch(r'\d{1,3}', deidentified_text.strip())
-    if _bare_number and not confirmed_facts.get("age"):
-        last_ai_msg_for_age = ""
-        for msg in reversed(messages[:-1]):
-            if isinstance(msg, AIMessage):
-                last_ai_msg_for_age = (msg.content if hasattr(msg, "content") else str(msg)).lower()
-                break
-        if "tuổi" in last_ai_msg_for_age or "age" in last_ai_msg_for_age:
-            age_val = int(deidentified_text.strip())
-            if 1 <= age_val <= 120:
-                confirmed_facts["age"] = str(age_val)
+    if _bare_number and _last_ai_content:
+        bare_val = int(deidentified_text.strip())
+
+        # Bare number → severity (if AI just asked about pain scale 1-10)
+        _severity_kw = ["thang", "1-10", "1 đến 10", "mức độ đau", "mấy điểm", "pain scale", "mức đau"]
+        if not confirmed_facts.get("severity") and any(kw in _last_ai_content for kw in _severity_kw):
+            if 1 <= bare_val <= 10:
+                confirmed_facts["severity"] = f"{bare_val}/10"
+
+        # Bare number → age (if AI just asked about age)
+        elif not confirmed_facts.get("age"):
+            if "tuổi" in _last_ai_content or "age" in _last_ai_content:
+                if 1 <= bare_val <= 120:
+                    confirmed_facts["age"] = str(bare_val)
 
     if _is_bare_negative:
         last_ai_msg = _last_ai_content
@@ -179,6 +191,12 @@ async def intake_node_v4(
                 confirmed_facts["fever"] = "no"
             if any(kw in last_ai_msg for kw in ["mang thai", "kinh nguyệt", "kinh"]) and not confirmed_facts.get("lmp"):
                 confirmed_facts["lmp"] = "none/not applicable"
+    # Context-aware: LMP — AI asked about kinh nguyệt and BN answered with time expression
+    if not _is_bare_negative and not confirmed_facts.get("lmp") and _last_ai_content:
+        _ai_asked_lmp = any(kw in _last_ai_content for kw in ["kinh nguyệt", "kinh", "lmp", "kỳ kinh"])
+        _is_time_answer = bool(re.search(r'(?:tuần|tháng|ngày|hôm|cách đây|trước|qua)', deidentified_text))
+        if _ai_asked_lmp and _is_time_answer:
+            confirmed_facts["lmp"] = deidentified_text.strip()
             if "tiểu" in last_ai_msg and not confirmed_facts.get("urinary"):
                 confirmed_facts["urinary"] = "normal"
             if "hút thuốc" in last_ai_msg and not confirmed_facts.get("social_history"):
@@ -207,6 +225,42 @@ async def intake_node_v4(
     if is_combo_emergency:
         logger.warning("intake_v4.combo_emergency", combo=combo_name, case_id=case_id)
         return _emergency_response_v4(state, trigger=combo_name, confirmed_facts=confirmed_facts)
+
+    # === Step 6b: Code-enforced early demographics gate ===
+    # Age and gender MUST be asked by turn 3. If missing after CC is known, force it.
+    _has_cc = bool(confirmed_facts.get("cc"))
+    _missing_age = not confirmed_facts.get("age")
+    _missing_gender = not confirmed_facts.get("gender")
+    _early_turns = state.get("turn_count", 0)  # turn_count not yet incremented this turn
+
+    if _has_cc and (_missing_age or _missing_gender) and _early_turns >= 3:
+        # Code hard-override: ask age+gender now, skip LLM for this turn
+        if _missing_age and _missing_gender:
+            early_q = "Bạn bao nhiêu tuổi và là nam hay nữ?"
+        elif _missing_age:
+            early_q = "Bạn bao nhiêu tuổi?"
+        else:
+            early_q = "Bạn là nam hay nữ?"
+
+        tracker = IntakeTracker(data=state.get("intake_tracker"))
+        _sync_tracker_from_facts(tracker, confirmed_facts)
+        turn_count_early = _early_turns + 1
+        tracker.message_count = turn_count_early
+
+        logger.info("intake_v4.early_demographics_forced", case_id=case_id,
+                    missing_age=_missing_age, missing_gender=_missing_gender, turn=_early_turns)
+        return {
+            "messages": [AIMessage(content=early_q)],
+            "detected_language": detected_language,
+            "cultural_expressions": state.get("cultural_expressions", []) + cultural_expressions,
+            "is_emergency": False,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "intake_tracker": tracker.to_dict(),
+            "intake_data": None,
+            "intake_complete": False,
+            "confirmed_facts": confirmed_facts,
+            "turn_count": turn_count_early,
+        }
 
     # === Step 7: Build dynamic system prompt ===
     gender = confirmed_facts.get("gender", "")
@@ -317,19 +371,73 @@ async def intake_node_v4(
             "turn_count": turn_count,
         }
 
-    # === Step 12: Code completion gate ===
+    # === Step 12: Code completion gate (2-phase: summary → confirm) ===
     intake_complete = False
-    if llm_wants_done:
-        intake_complete = _validate_completion(confirmed_facts, complaint_category, turn_count)
-        if not intake_complete:
+    awaiting_confirmation = state.get("awaiting_confirmation", False)
+
+    # Phase 2: BN is confirming/rejecting the summary we showed last turn
+    if awaiting_confirmation:
+        _bn_confirmed = bool(re.match(
+            r'^(ok|okay|ổn|đúng|đúng rồi|chính xác|xác nhận|đồng ý|duyệt|yes|yep|ừ|uh|được|vậy đó|đúng vậy)\b',
+            clean_text.strip(), re.IGNORECASE | re.UNICODE
+        ))
+        _bn_wants_change = bool(re.match(
+            r'^(sai|không đúng|sửa|chưa đúng|thiếu|bổ sung|thêm|chỉnh|chưa|không phải)',
+            clean_text.strip(), re.IGNORECASE | re.UNICODE
+        ))
+        if _bn_confirmed:
+            logger.info("intake_v4.summary_confirmed", case_id=case_id)
+            intake_complete = True
+            patient_response = "Cảm ơn bạn. Hồ sơ đã sẵn sàng, bác sĩ sẽ xem xét và liên hệ sớm nhất."
+        elif _bn_wants_change:
+            # BN wants to correct → back to intake, ask what to change
+            patient_response = "Bạn muốn sửa hoặc bổ sung thông tin nào?"
+            awaiting_confirmation = False
+        else:
+            # Ambiguous → treat as confirm if they said something short/neutral
+            if len(clean_text.strip()) <= 10:
+                intake_complete = True
+                patient_response = "Cảm ơn bạn. Hồ sơ đã sẵn sàng, bác sĩ sẽ xem xét và liên hệ sớm nhất."
+            else:
+                # Long text → treat as additional info, re-extract and continue
+                awaiting_confirmation = False
+    else:
+        # Phase 1: Check if ready to show summary
+        _can_complete = _validate_completion(confirmed_facts, complaint_category, turn_count)
+
+        if llm_wants_done and not _can_complete:
             missing = _get_hard_missing(confirmed_facts)
             logger.info("intake_v4.premature_done_blocked", case_id=case_id, missing=missing)
             patient_response = _ask_next_missing(confirmed_facts, complaint_category)
 
-    # Code-side auto-complete: if all required fields collected, complete regardless of LLM
-    if not intake_complete and _validate_completion(confirmed_facts, complaint_category, turn_count):
-        logger.info("intake_v4.auto_complete", case_id=case_id, turn_count=turn_count)
-        intake_complete = True
+        elif _can_complete:
+            # Ready → show summary and ask for confirmation (don't mark complete yet)
+            logger.info("intake_v4.showing_summary_for_confirmation", case_id=case_id)
+            tracker_tmp = IntakeTracker(data=state.get("intake_tracker"))
+            _sync_tracker_from_facts(tracker_tmp, confirmed_facts)
+            summary = _generate_summary_v4(tracker_tmp, confirmed_facts)
+            patient_response = summary + "\n\n**Thông tin trên đã chính xác chưa?** Nhắn \"ok\" để xác nhận, hoặc cho tôi biết cần sửa gì."
+            awaiting_confirmation = True
+
+        # Anti-loop: ANY response mentioning "bổ sung"/"thêm gì" → always redirect
+        # This catches LLM asking "bổ sung?" regardless of completion status
+        _is_llm_asking_supplement = bool(re.search(
+            r'bổ sung|thêm (?:gì|điều gì)|có gì thêm|muốn (?:thêm|nói thêm)', patient_response, re.IGNORECASE
+        ))
+        if _is_llm_asking_supplement:
+            next_q = _ask_next_missing(confirmed_facts, complaint_category)
+            if "bổ sung" not in next_q:
+                patient_response = next_q
+                logger.info("intake_v4.supplement_replaced_with_missing",
+                            case_id=case_id, next=next_q)
+            else:
+                # No more specific fields → show summary anyway
+                logger.info("intake_v4.no_more_fields_force_summary", case_id=case_id)
+                tracker_tmp = IntakeTracker(data=state.get("intake_tracker"))
+                _sync_tracker_from_facts(tracker_tmp, confirmed_facts)
+                summary = _generate_summary_v4(tracker_tmp, confirmed_facts)
+                patient_response = summary + "\n\n**Thông tin trên đã chính xác chưa?** Nhắn \"ok\" để xác nhận, hoặc cho tôi biết cần sửa gì."
+                awaiting_confirmation = True
 
 
     # === Step 13: Final cleanup — strip any markers that leaked through ===
@@ -345,9 +453,6 @@ async def intake_node_v4(
     _sync_tracker_from_facts(tracker, confirmed_facts)
     tracker.message_count = turn_count
 
-    if intake_complete:
-        patient_response = _generate_summary_v4(tracker, confirmed_facts)
-
     return {
         "messages": [AIMessage(content=patient_response)],
         "detected_language": detected_language,
@@ -357,6 +462,7 @@ async def intake_node_v4(
         "intake_tracker": tracker.to_dict(),
         "intake_data": tracker.to_intake_data() if intake_complete else None,
         "intake_complete": intake_complete,
+        "awaiting_confirmation": awaiting_confirmation,
         "confirmed_facts": confirmed_facts,
         "turn_count": turn_count,
     }

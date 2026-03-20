@@ -29,7 +29,11 @@ _SMOKE_NEGATIVES  = ["không hút thuốc", "không hút", "chưa hút", "no smo
 _ALCOHOL_NEGATIVES= ["không uống rượu", "không uống bia", "không uống rượu bia", "no alcohol"]
 
 _GENDER_FEMALE = ["nữ", "female", "phụ nữ", "con gái", "bà", "cô", "chị", "em gái"]
-_GENDER_MALE   = ["nam", "male", "đàn ông", "con trai", "ông", "chú", "anh", "em trai"]
+_GENDER_MALE   = ["nam", "male", "đàn ông", "con trai", "chú", "em trai"]
+# "ông", "anh" removed from simple substring list — matched via word-boundary regex below
+_GENDER_MALE_BOUNDARY = re.compile(
+    r'\b(ông|anh)\b', re.IGNORECASE | re.UNICODE
+)
 
 _FEVER_POSITIVE   = ["sốt", "nóng người", "nóng sốt", "fever"]
 _NAUSEA_POSITIVE  = ["buồn nôn", "nôn", "muốn ói", "ói"]
@@ -76,11 +80,11 @@ def extract_facts_from_text(text: str, existing_facts: dict) -> dict:
     # Gender — check female first (more specific), then male
     # Also handle "26 tuổi nữ" pattern (number + tuổi + gender word)
     if not facts.get("gender"):
-        # Female keywords
+        # Female keywords (substring match is fine — no ambiguous substrings)
         if any(w in t for w in _GENDER_FEMALE):
             facts["gender"] = "female"
-        # Male keywords — only if no female keyword found
-        elif any(w in t for w in _GENDER_MALE):
+        # Male keywords — substring-safe list first, then word-boundary regex for "ông"/"anh"
+        elif any(w in t for w in _GENDER_MALE) or _GENDER_MALE_BOUNDARY.search(t):
             facts["gender"] = "male"
 
     # Age — extract number + "tuổi", or standalone plausible age number
@@ -165,6 +169,11 @@ def extract_facts_from_text(text: str, existing_facts: dict) -> dict:
                 if not facts.get("complaint_category"):
                     facts["complaint_category"] = cat
                 break
+        # General CC: "bị + symptom" (sưng, ngứa, ho, etc.)
+        if not facts.get("cc"):
+            m_general = re.search(r'(?:bị|có)\s+((?:sưng|ngứa|ho|chảy máu|đỏ|nổi|phát ban|mẩn|bầm|tê|liệt|mệt|chóng mặt|ù tai)\s*\w*)', t)
+            if m_general:
+                facts["cc"] = m_general.group(1).strip()
 
     # Onset extraction
     if not facts.get("onset"):
@@ -173,6 +182,14 @@ def extract_facts_from_text(text: str, existing_facts: dict) -> dict:
             r'(?:đau|bị)\s+(?:từ\s+)?(\w+\s+(?:hôm\s+qua|hôm\s+nay|sáng|tối|trưa))',
             r'(\d+\s+(?:tiếng|giờ|ngày|tuần)\s+trước)',
             r'(?:đau\s+)(đột\s+ngột|từ\s+từ|dần\s+dần)',
+            # "bị X hôm qua", "bị từ hôm qua", "bị X ngày/tuần nay"
+            r'(?:bị\s+\w+\s+)(hôm\s+qua|hôm\s+nay|tối\s+qua|sáng\s+nay)',
+            r'(?:bị\s+)(?:từ\s+)?(hôm\s+qua|hôm\s+nay|tối\s+qua|sáng\s+nay)',
+            r'(?:bị\s+)\w*\s*(\d+\s+(?:ngày|tuần|tháng)\s+(?:nay|rồi|qua))',
+            # standalone time: "hôm qua", "2 ngày nay", "cách đây X ngày"
+            r'\b(hôm\s+qua|hôm\s+nay|tối\s+qua|sáng\s+nay)\b',
+            r'(cách\s+đây\s+\d+\s+(?:ngày|tuần|tháng|giờ))',
+            r'(\d+\s+(?:ngày|tuần|tháng)\s+(?:nay|rồi|trước|qua))',
         ]
         for pat in _onset_pats:
             m_onset = re.search(pat, t)
@@ -185,22 +202,46 @@ def extract_facts_from_text(text: str, existing_facts: dict) -> dict:
         elif "đột ngột" in t and facts.get("onset") and "đột ngột" not in facts["onset"]:
             facts["onset"] = facts["onset"] + " — đột ngột"
 
-    # Location extraction (abdominal)
+    # Location extraction — abdominal + general body parts
     if not facts.get("location"):
         _loc_map = [
+            # Abdominal specific
             (["hố chậu phải", "rlq", "right lower"], "hố chậu phải"),
             (["hố chậu trái", "llq", "left lower"], "hố chậu trái"),
             (["thượng vị", "trên rốn", "epigastric", "dạ dày"], "thượng vị/trên rốn"),
-            (["quanh rốn", "quanh rốn", "periumbilical"], "quanh rốn"),
+            (["quanh rốn", "periumbilical"], "quanh rốn"),
             (["dưới rốn", "hạ vị", "hypogastric", "below navel"], "dưới rốn"),
             (["hông phải", "sườn phải", "right flank"], "hông sườn phải"),
             (["hông trái", "sườn trái", "left flank"], "hông sườn trái"),
             (["toàn bụng", "khắp bụng"], "toàn bụng"),
+            # General body parts
+            (["má phải"], "má phải"),
+            (["má trái"], "má trái"),
+            (["hai má", "hai bên má", "cả hai má"], "hai bên má"),
+            (["cổ họng", "họng"], "cổ họng"),
+            (["ngực phải"], "ngực phải"),
+            (["ngực trái"], "ngực trái"),
+            (["lưng"], "lưng"),
+            (["vai phải"], "vai phải"),
+            (["vai trái"], "vai trái"),
+            (["đầu gối phải"], "đầu gối phải"),
+            (["đầu gối trái"], "đầu gối trái"),
+            (["mắt phải"], "mắt phải"),
+            (["mắt trái"], "mắt trái"),
+            (["tai phải"], "tai phải"),
+            (["tai trái"], "tai trái"),
+            (["hàm phải"], "hàm phải"),
+            (["hàm trái"], "hàm trái"),
         ]
         for keywords, label in _loc_map:
             if any(kw in t for kw in keywords):
                 facts["location"] = label
                 break
+        # Fallback: extract "ở + body part" or "vùng + body part"
+        if not facts.get("location"):
+            m_loc = re.search(r'(?:ở|vùng|tại)\s+((?:má|ngực|bụng|lưng|vai|đầu|cổ|tay|chân|hông|mắt|tai|hàm|đùi|mông)\s*(?:phải|trái)?)', t)
+            if m_loc:
+                facts["location"] = m_loc.group(1).strip()
 
     # Character extraction
     if not facts.get("character"):
@@ -261,11 +302,13 @@ def extract_facts_from_text(text: str, existing_facts: dict) -> dict:
         r"(?:tuần|tháng|ngày)\s+(?:trước|qua)",
         r"lần\s+cuối\s+(?:là|khoảng)",
         r"\d+\s+(?:tuần|ngày|tháng)\s+trước",
+        r"cách\s+đây\s+\d+\s+(?:tuần|ngày|tháng|năm)",  # "cách đây 1 tuần"
+        r"cách\s+đây\s+(?:mấy|vài)\s+(?:tuần|ngày|tháng)",  # "cách đây mấy ngày"
     ]
     if not facts.get("lmp"):
         for pat in _lmp_patterns:
             if re.search(pat, t):
-                facts["lmp"] = "reported"
+                facts["lmp"] = t.strip()  # Store actual text, not just "reported"
                 break
     # LMP negative / not applicable
     if not facts.get("lmp") and any(p in t for p in ["không ra máu", "không có kinh", "mãn kinh", "chưa có kinh"]):

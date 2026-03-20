@@ -64,6 +64,7 @@ class CareFlowState(TypedDict):
     narrative_done: bool               # V3: whether open narrative phase has been completed
     confirmed_facts: dict | None       # V4: code-extracted facts dict
     turn_count: int                    # V4: number of patient turns so far
+    awaiting_confirmation: bool        # V4: summary shown, waiting for BN to confirm
     narrative_complete: bool           # V3: True after open-ended narrative phase is done (alias)
 
     # === Internal Flow Control ===
