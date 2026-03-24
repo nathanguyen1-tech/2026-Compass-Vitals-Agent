@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Compass Vitals — Auto Test Logs</title>
+    <title>Compass Vitals — Test Run Detail</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f0f2f5; min-height: 100vh; }
@@ -20,35 +20,29 @@
 
         .content { max-width: 1200px; margin: 20px auto; padding: 0 20px; }
 
-        /* Run list */
-        .run-card { background: white; border-radius: 10px; padding: 16px 20px; margin-bottom: 12px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); cursor: pointer; transition: all 0.2s; display: flex; align-items: center; gap: 16px; }
-        .run-card:hover { box-shadow: 0 3px 12px rgba(0,0,0,0.12); transform: translateY(-1px); }
-        .run-card.active { border-left: 4px solid #0066cc; }
-        .run-id { font-weight: 600; font-size: 14px; color: #333; }
-        .run-time { font-size: 12px; color: #888; }
-        .run-stats { margin-left: auto; display: flex; gap: 12px; align-items: center; }
+        /* Back link */
+        .back-link { display: inline-flex; align-items: center; gap: 6px; color: #0066cc; text-decoration: none; font-size: 13px; font-weight: 600; margin-bottom: 16px; padding: 6px 12px; border-radius: 6px; background: white; box-shadow: 0 1px 3px rgba(0,0,0,0.08); transition: all 0.2s; }
+        .back-link:hover { background: #e8f0fe; box-shadow: 0 2px 6px rgba(0,0,0,0.12); }
+
+        /* Run summary card */
+        .run-summary { background: white; border-radius: 10px; padding: 20px; margin-bottom: 16px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
+        .run-summary-info { flex: 1; min-width: 200px; }
+        .run-summary-id { font-weight: 700; font-size: 16px; color: #1a1a2e; }
+        .run-summary-time { font-size: 12px; color: #888; margin-top: 2px; }
+        .run-summary-stats { display: flex; gap: 16px; align-items: center; }
         .run-stat { text-align: center; }
-        .run-stat-val { font-size: 16px; font-weight: 700; }
+        .run-stat-val { font-size: 18px; font-weight: 700; }
         .run-stat-label { font-size: 10px; color: #888; }
         .pass-color { color: #2e7d32; }
         .fail-color { color: #c62828; }
         .warn-color { color: #e65100; }
-        .run-rate { font-size: 18px; font-weight: 700; padding: 4px 12px; border-radius: 8px; }
+        .run-rate { font-size: 20px; font-weight: 700; padding: 6px 14px; border-radius: 8px; }
         .rate-good { background: #e8f5e9; color: #2e7d32; }
         .rate-ok { background: #fff3e0; color: #e65100; }
         .rate-bad { background: #ffebee; color: #c62828; }
-        .run-delete { background: none; border: none; color: #ccc; cursor: pointer; font-size: 16px; padding: 4px 8px; }
-        .run-delete:hover { color: #c62828; }
-
-        /* Detail view */
-        .detail-panel { display: none; background: white; border-radius: 10px; margin-top: 16px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
-        .detail-panel.show { display: block; }
-        .detail-header { padding: 16px 20px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; }
-        .detail-header h2 { font-size: 15px; color: #333; }
-        .detail-close { background: none; border: none; font-size: 18px; cursor: pointer; color: #888; }
-        .detail-close:hover { color: #333; }
 
         /* Case table */
+        .detail-panel { background: white; border-radius: 10px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
         .case-table { width: 100%; border-collapse: collapse; }
         .case-table th { background: #f5f5f5; padding: 10px 14px; text-align: left; font-size: 12px; color: #666; border-bottom: 2px solid #e0e0e0; }
         .case-table td { padding: 10px 14px; font-size: 13px; border-bottom: 1px solid #f0f0f0; }
@@ -70,14 +64,20 @@
         .chat-msg.agent { align-self: flex-start; background: white; border: 1px solid #e0e0e0; border-bottom-left-radius: 4px; }
         .chat-msg.patient { align-self: flex-end; background: #0066cc; color: white; border-bottom-right-radius: 4px; }
         .chat-msg-label { font-size: 10px; font-weight: 600; margin-bottom: 2px; opacity: 0.7; }
+        .patient-info-box { background: white; border: 1px solid #e0e0e0; border-radius: 10px; padding: 16px; margin-top: 12px; }
+        .patient-info-box h4 { font-size: 14px; font-weight: 700; color: #333; margin-bottom: 10px; }
+        .patient-info-row { display: flex; gap: 12px; flex-wrap: wrap; font-size: 13px; color: #444; }
+        .patient-info-item { background: #f5f5f5; padding: 5px 12px; border-radius: 6px; }
+        .patient-info-item b { color: #1a1a2e; }
+
         .eval-box { background: linear-gradient(135deg, #f0f7ff, #e8f0fe); border: 2px solid #0066cc; border-radius: 12px; padding: 20px; margin-top: 16px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,102,204,0.12); }
         .eval-box h4 { font-size: 17px; font-weight: 700; color: #0066cc; margin-bottom: 12px; }
         .eval-row { display: flex; gap: 16px; flex-wrap: wrap; font-size: 13px; color: #444; }
         .eval-item { background: white; padding: 6px 12px; border-radius: 6px; border: 1px solid #d0e3f7; }
         .eval-recommend { margin-top: 10px; font-size: 14px; color: #333; line-height: 1.6; background: white; padding: 10px 14px; border-radius: 8px; border-left: 3px solid #0066cc; }
 
-        .empty-state { text-align: center; padding: 60px 20px; color: #999; }
-        .empty-state h3 { color: #666; margin-bottom: 8px; }
+        .loading { text-align: center; padding: 60px 20px; color: #888; }
+        .error-state { text-align: center; padding: 60px 20px; color: #c62828; }
     </style>
 </head>
 <body>
@@ -95,122 +95,116 @@
     <div class="header">
         <div class="header-icon">&#128203;</div>
         <div class="header-info">
-            <h1>Auto Test Logs</h1>
-            <p>L&#7883;ch s&#7917; v&#224; k&#7871;t qu&#7843; t&#7845;t c&#7843; c&#225;c l&#7847;n ch&#7841;y auto test</p>
+            <h1>Chi ti&#7871;t Test Run</h1>
+            <p>K&#7871;t qu&#7843; &#273;&#225;nh gi&#225; t&#7915;ng case trong l&#7847;n ch&#7841;y test</p>
         </div>
     </div>
 
     <div class="content">
-        <div id="runList"></div>
-        <div class="detail-panel" id="detailPanel">
-            <div class="detail-header">
-                <h2 id="detailTitle">Chi ti&#7871;t</h2>
-                <button class="detail-close" onclick="closeDetail()">&times;</button>
-            </div>
-            <table class="case-table">
-                <thead>
-                    <tr>
-                        <th>Case</th>
-                        <th>Tri&#7879;u ch&#7913;ng</th>
-                        <th>Severity</th>
-                        <th>An to&#224;n</th>
-                        <th>Khai th&#225;c b&#7879;nh s&#7917;</th>
-                        <th>L&#7901;i khuy&#234;n LS</th>
-                        <th>Giao ti&#7871;p</th>
-                        <th>K&#7871;t lu&#7853;n</th>
-                    </tr>
-                </thead>
-                <tbody id="caseTableBody"></tbody>
-            </table>
-            <div class="chat-detail" id="chatDetail">
-                <div class="chat-detail-header">
-                    <h3 id="chatDetailTitle">N&#7897;i dung chat</h3>
+        <a href="/log-auto-test" class="back-link">&#8592; Quay l&#7841;i danh s&#225;ch</a>
+
+        <div id="loadingState" class="loading">&#272;ang t&#7843;i d&#7919; li&#7879;u...</div>
+        <div id="errorState" class="error-state" style="display:none"></div>
+
+        <div id="mainContent" style="display:none">
+            <div class="run-summary" id="runSummary"></div>
+            <div class="detail-panel">
+                <table class="case-table">
+                    <thead>
+                        <tr>
+                            <th>Case</th>
+                            <th>Tri&#7879;u ch&#7913;ng</th>
+                            <th>GT</th>
+                            <th>Tu&#7893;i</th>
+                            <th>Ti&#7873;n s&#7917;</th>
+                            <th>Severity</th>
+                            <th>An to&#224;n</th>
+                            <th>B&#7879;nh s&#7917;</th>
+                            <th>LS</th>
+                            <th>GT&#7871;p</th>
+                            <th>K&#7871;t lu&#7853;n</th>
+                        </tr>
+                    </thead>
+                    <tbody id="caseTableBody"></tbody>
+                </table>
+                <div class="chat-detail" id="chatDetail">
+                    <div class="chat-detail-header">
+                        <h3 id="chatDetailTitle">N&#7897;i dung chat</h3>
+                    </div>
+                    <div class="patient-info-box" id="patientInfoBox"></div>
+                    <div class="eval-box" id="evalBox"></div>
+                    <div class="chat-messages" id="chatMessages"></div>
                 </div>
-                <div class="eval-box" id="evalBox"></div>
-                <div class="chat-messages" id="chatMessages"></div>
             </div>
-        </div>
-        <div class="empty-state" id="emptyState">
-            <h3>Ch&#432;a c&#243; d&#7919; li&#7879;u</h3>
-            <p>Ch&#7841;y Auto Test t&#7841;i <a href="/auto-test">/auto-test</a> &#273;&#7875; t&#7841;o k&#7871;t qu&#7843;.</p>
         </div>
     </div>
 
     <script>
-        let currentRuns = [];
-        let currentRunData = null;
+        let runData = null;
 
-        async function loadRuns() {
-            try {
-                const res = await fetch('/api/v1/auto-test/runs');
-                const data = await res.json();
-                currentRuns = data.runs || [];
-                renderRunList();
-            } catch (err) {
-                document.getElementById('runList').innerHTML =
-                    '<div style="color:#c62828;padding:20px">L\u1ED7i t\u1EA3i d\u1EEF li\u1EC7u: ' + err.message + '</div>';
-            }
+        function getRunId() {
+            const params = new URLSearchParams(window.location.search);
+            return params.get('id');
         }
 
-        function renderRunList() {
-            const container = document.getElementById('runList');
-            const empty = document.getElementById('emptyState');
-
-            if (!currentRuns.length) {
-                container.innerHTML = '';
-                empty.style.display = 'block';
+        async function loadDetail() {
+            const runId = getRunId();
+            if (!runId) {
+                showError('Thi\u1EBFu tham s\u1ED1 id. Vui l\u00F2ng quay l\u1EA1i <a href="/log-auto-test">danh s\u00E1ch</a>.');
                 return;
             }
-            empty.style.display = 'none';
 
-            container.innerHTML = currentRuns.map(run => {
-                const s = run.summary || {};
-                const passed = s.passed || 0;
-                const failed = s.failed || 0;
-                const ni = s.needs_improvement || 0;
-                const total = run.total_cases || run.case_count || 0;
-                const rate = total ? Math.round(passed / total * 100) : 0;
-                const rateClass = rate >= 80 ? 'rate-good' : (rate >= 50 ? 'rate-ok' : 'rate-bad');
-
-                return `<div class="run-card" onclick="window.location.href='/log-auto-test-detail?id=${encodeURIComponent(run.test_run_id)}'">
-                    <div>
-                        <div class="run-id">${run.name || run.test_run_id}</div>
-                        <div class="run-time">${run.name ? run.test_run_id + ' \u00B7 ' : ''}${formatTimestamp(run.timestamp)}</div>
-                    </div>
-                    <div class="run-stats">
-                        <div class="run-stat"><div class="run-stat-val">${total}</div><div class="run-stat-label">Cases</div></div>
-                        <div class="run-stat"><div class="run-stat-val pass-color">${passed}</div><div class="run-stat-label">PASS</div></div>
-                        <div class="run-stat"><div class="run-stat-val warn-color">${ni}</div><div class="run-stat-label">C\u1EA7n c\u1EA3i thi\u1EC7n</div></div>
-                        <div class="run-stat"><div class="run-stat-val fail-color">${failed}</div><div class="run-stat-label">FAIL</div></div>
-                        <div class="run-rate ${rateClass}">${rate}%</div>
-                    </div>
-                    <button class="run-delete" onclick="event.stopPropagation();deleteRun('${run.test_run_id}')" title="X\u00F3a">&times;</button>
-                </div>`;
-            }).join('');
-        }
-
-        async function loadRunDetail(runId) {
             try {
-                const res = await fetch(`/api/v1/auto-test/runs/${runId}`);
-                if (!res.ok) throw new Error('Not found');
-                currentRunData = await res.json();
-                renderDetail();
+                const res = await fetch(`/api/v1/auto-test/runs/${encodeURIComponent(runId)}`);
+                if (!res.ok) throw new Error('Kh\u00F4ng t\u00ECm th\u1EA5y test run');
+                runData = await res.json();
+                renderPage();
             } catch (err) {
-                alert('L\u1ED7i: ' + err.message);
+                showError(`L\u1ED7i: ${err.message}. <a href="/log-auto-test">Quay l\u1EA1i danh s\u00E1ch</a>`);
             }
         }
 
-        function renderDetail() {
-            const panel = document.getElementById('detailPanel');
-            const title = document.getElementById('detailTitle');
+        function showError(html) {
+            document.getElementById('loadingState').style.display = 'none';
+            const el = document.getElementById('errorState');
+            el.innerHTML = html;
+            el.style.display = 'block';
+        }
+
+        function renderPage() {
+            document.getElementById('loadingState').style.display = 'none';
+            document.getElementById('mainContent').style.display = 'block';
+
+            // Update page title
+            document.title = `${runData.test_run_id} \u2014 Test Run Detail`;
+
+            // Summary card
+            const s = runData.summary || {};
+            const passed = s.passed || 0;
+            const failed = s.failed || 0;
+            const ni = s.needs_improvement || 0;
+            const total = runData.total_cases || 0;
+            const rate = total ? Math.round(passed / total * 100) : 0;
+            const rateClass = rate >= 80 ? 'rate-good' : (rate >= 50 ? 'rate-ok' : 'rate-bad');
+
+            document.getElementById('runSummary').innerHTML = `
+                <div class="run-summary-info">
+                    <div class="run-summary-id">${runData.name || runData.test_run_id}</div>
+                    <div class="run-summary-time">${runData.name ? runData.test_run_id + ' \u00B7 ' : ''}${formatTimestamp(runData.timestamp)}</div>
+                </div>
+                <div class="run-summary-stats">
+                    <div class="run-stat"><div class="run-stat-val">${total}</div><div class="run-stat-label">Cases</div></div>
+                    <div class="run-stat"><div class="run-stat-val pass-color">${passed}</div><div class="run-stat-label">PASS</div></div>
+                    <div class="run-stat"><div class="run-stat-val warn-color">${ni}</div><div class="run-stat-label">C\u1EA7n c\u1EA3i thi\u1EC7n</div></div>
+                    <div class="run-stat"><div class="run-stat-val fail-color">${failed}</div><div class="run-stat-label">FAIL</div></div>
+                    <div class="run-rate ${rateClass}">${rate}%</div>
+                </div>
+            `;
+
+            // Case table
             const tbody = document.getElementById('caseTableBody');
-
-            title.textContent = `${currentRunData.test_run_id} — ${currentRunData.timestamp}`;
-            panel.classList.add('show');
-            closeChatDetail();
-
-            tbody.innerHTML = currentRunData.results.map((r, i) => {
-                const s = r.scenario || {};
+            tbody.innerHTML = runData.results.map((r, i) => {
+                const sc = r.scenario || {};
                 const e = r.evaluation || {};
                 const verdict = e.final_verdict || r.status || 'N/A';
                 let badgeClass = 'verdict-pass';
@@ -219,8 +213,11 @@
 
                 return `<tr onclick="showChat(${i})" ${i === 0 ? 'class="selected"' : ''}>
                     <td>${r.case_number}</td>
-                    <td>${s.primary_symptom || ''}</td>
-                    <td>${s.severity || ''}</td>
+                    <td>${sc.primary_symptom || ''}</td>
+                    <td>${sc.gender || '-'}</td>
+                    <td>${sc.age || '-'}</td>
+                    <td style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${(sc.medical_history || '').replace(/"/g, '&quot;')}">${sc.medical_history || '-'}</td>
+                    <td>${sc.severity || ''}</td>
                     <td>${e.safety_detection || 'N/A'}</td>
                     <td>${e.history_completeness || '-'}/5</td>
                     <td>${e.clinical_advice_quality || '-'}/5</td>
@@ -230,13 +227,11 @@
             }).join('');
 
             // Auto show first case
-            if (currentRunData.results.length) showChat(0);
-
-            panel.scrollIntoView({ behavior: 'smooth' });
+            if (runData.results.length) showChat(0);
         }
 
         function showChat(index) {
-            const result = currentRunData.results[index];
+            const result = runData.results[index];
             if (!result) return;
 
             // Highlight row
@@ -253,6 +248,25 @@
             const e = result.evaluation || {};
 
             chatTitle.textContent = `Case ${result.case_number}: ${s.primary_symptom || ''}`;
+
+            // Patient info box
+            const patientInfoBox = document.getElementById('patientInfoBox');
+            const hasPatientInfo = s.gender || s.age || s.medical_history || s.current_medications || s.allergies;
+            if (hasPatientInfo) {
+                patientInfoBox.innerHTML = `
+                    <h4>Th\u00F4ng tin b\u1EC7nh nh\u00E2n</h4>
+                    <div class="patient-info-row">
+                        ${s.gender ? `<span class="patient-info-item">Gi\u1EDBi t\u00EDnh: <b>${s.gender}</b></span>` : ''}
+                        ${s.age ? `<span class="patient-info-item">Tu\u1ED5i: <b>${s.age}</b></span>` : ''}
+                        ${s.medical_history ? `<span class="patient-info-item">Ti\u1EC1n s\u1EED: <b>${s.medical_history}</b></span>` : ''}
+                        ${s.current_medications ? `<span class="patient-info-item">Thu\u1ED1c: <b>${s.current_medications}</b></span>` : ''}
+                        ${s.allergies ? `<span class="patient-info-item">D\u1ECB \u1EE9ng: <b>${s.allergies}</b></span>` : ''}
+                    </div>
+                `;
+                patientInfoBox.style.display = 'block';
+            } else {
+                patientInfoBox.style.display = 'none';
+            }
 
             // Evaluation box
             evalBox.innerHTML = `
@@ -288,26 +302,6 @@
             return div.innerHTML;
         }
 
-        function closeDetail() {
-            document.getElementById('detailPanel').classList.remove('show');
-            closeChatDetail();
-        }
-
-        function closeChatDetail() {
-            document.getElementById('chatDetail').classList.remove('show');
-        }
-
-        async function deleteRun(runId) {
-            if (!confirm(`X\u00F3a test run ${runId}?`)) return;
-            try {
-                await fetch(`/api/v1/auto-test/runs/${runId}`, { method: 'DELETE' });
-                await loadRuns();
-                closeDetail();
-            } catch (err) {
-                alert('L\u1ED7i x\u00F3a: ' + err.message);
-            }
-        }
-
         function formatTimestamp(iso) {
             if (!iso) return '';
             const d = new Date(iso);
@@ -316,7 +310,7 @@
         }
 
         // Init
-        loadRuns();
+        loadDetail();
     </script>
 </body>
 </html>

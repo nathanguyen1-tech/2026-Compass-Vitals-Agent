@@ -48,7 +48,9 @@ async def generate_scenarios_endpoint(request: ScenarioGenerateRequest):
         count=request.count,
         severity_filter=request.severity_filter,
         topic=request.topic,
+        medical_conditions=request.medical_conditions,
         reference_content=request.reference_content,
+        randomize_details=request.randomize_details,
     )
     return ScenarioGenerateResponse(scenarios=scenarios)
 
@@ -92,6 +94,7 @@ async def save_run_endpoint(request: ExportRequest):
         total_cases=request.summary.get("total_cases", len(request.results)),
         summary=request.summary,
         results=request.results,
+        name=request.name,
     )
     return {"status": "saved", "test_run_id": request.test_run_id}
 

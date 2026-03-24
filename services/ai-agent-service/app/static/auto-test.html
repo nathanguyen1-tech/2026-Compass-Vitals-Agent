@@ -244,6 +244,20 @@
         .typing span:nth-child(3) { animation-delay: 0.4s; }
         @keyframes bounce { 0%, 60%, 100% { transform: translateY(0); } 30% { transform: translateY(-4px); } }
 
+        /* Scenario cards (editable) */
+        .scenario-cards { max-height: 400px; overflow-y: auto; }
+        .scenario-card { background: white; border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); border-left: 3px solid #0066cc; }
+        .scenario-card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+        .scenario-card-id { font-weight: 600; font-size: 12px; color: #0066cc; }
+        .scenario-card-symptom { font-size: 12px; color: #333; }
+        .scenario-card-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 8px; margin-top: 6px; }
+        .scenario-card-fields label { font-size: 10px; color: #888; display: block; }
+        .scenario-card-fields input, .scenario-card-fields select {
+            width: 100%; padding: 3px 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px;
+        }
+        .scenario-card-fields .full-width { grid-column: 1 / -1; }
+        .setting-row input[type="checkbox"] { width: auto; }
+
         /* Scrollbar */
         .chat-container::-webkit-scrollbar, .control-panel::-webkit-scrollbar, .results-list::-webkit-scrollbar {
             width: 6px;
@@ -327,6 +341,10 @@
                     </select>
                 </div>
                 <div class="setting-row">
+                    <label>B&#7879;nh n&#7873;n</label>
+                    <input type="text" id="medicalConditions" placeholder="VD: vi&#234;m gan B, ti&#7875;u &#273;&#432;&#7901;ng..." style="font-size:13px" />
+                </div>
+                <div class="setting-row">
                     <label>T&#7889;c &#273;&#7897;</label>
                     <select id="speedSetting">
                         <option value="500">Nhanh (0.5s)</option>
@@ -334,11 +352,22 @@
                         <option value="3000">Ch&#7853;m (3s)</option>
                     </select>
                 </div>
+                <div class="setting-row">
+                    <label>Random ti&#7873;n s&#7917;/thu&#7889;c/d&#7883; &#7913;ng</label>
+                    <input type="checkbox" id="randomizeDetails" checked />
+                </div>
                 <div style="margin-top:10px">
                     <label style="font-size:13px;color:#333;display:block;margin-bottom:6px">File k&#7883;ch b&#7843;n (.md)</label>
                     <input type="file" id="scenarioFile" accept=".md,.txt" style="font-size:12px;width:100%" />
                     <div id="fileStatus" style="font-size:11px;color:#888;margin-top:4px"></div>
                 </div>
+            </div>
+
+            <!-- Test name -->
+            <div class="panel-section">
+                <h3>T&#234;n l&#7847;n test</h3>
+                <input type="text" id="testRunName" placeholder="V&#237; d&#7909;: Test s&#7889;t cao v2, Hotfix #12..." style="width:100%;padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:13px;" />
+                <div style="font-size:10px;color:#888;margin-top:4px">&#272;&#7875; tr&#7889;ng s&#7869; t&#7921; sinh theo th&#7901;i gian</div>
             </div>
 
             <!-- Controls -->
@@ -567,30 +596,87 @@
             const count = parseInt(document.getElementById('caseCount').value) || 5;
             const severity = document.getElementById('severityFilter').value;
             const topic = document.getElementById('topicFilter').value;
+            const randomize = document.getElementById('randomizeDetails').checked;
             setControlState('generating');
             resultsList.innerHTML = '';
             results = [];
             scenarios = [];
 
             try {
-                const payload = { count: count, severity_filter: severity, topic: topic };
+                const medicalConditions = document.getElementById('medicalConditions').value.trim();
+                const payload = { count, severity_filter: severity, topic, randomize_details: randomize };
+                if (medicalConditions) payload.medical_conditions = medicalConditions;
                 if (scenarioFileContent) payload.reference_content = scenarioFileContent;
                 const data = await apiPost('/api/v1/auto-test/generate-scenarios', payload);
                 scenarios = data.scenarios;
-                // Show pending items
-                scenarios.forEach((s, i) => addPendingItem(i, s));
+                renderScenarioCards();
                 updateStats();
                 setControlState('ready');
-                addSystemMsg(`\u0110\u00E3 sinh ${scenarios.length} k\u1ECBch b\u1EA3n. Nh\u1EA5n "B\u1EAFt \u0111\u1EA7u" \u0111\u1EC3 ch\u1EA1y.`);
+                addSystemMsg(`\u0110\u00E3 sinh ${scenarios.length} k\u1ECBch b\u1EA3n. Ch\u1EC9nh s\u1EEDa n\u1EBFu c\u1EA7n r\u1ED3i nh\u1EA5n "B\u1EAFt \u0111\u1EA7u".`);
             } catch (err) {
                 addSystemMsg(`L\u1ED7i sinh k\u1ECBch b\u1EA3n: ${err.message}`);
                 setControlState('idle');
             }
         }
 
+        function renderScenarioCards() {
+            resultsSection.style.display = 'block';
+            resultsList.innerHTML = '<div class="scenario-cards" id="scenarioCards">' +
+                scenarios.map((s, i) => `
+                    <div class="scenario-card" id="sc-card-${i}">
+                        <div class="scenario-card-header">
+                            <span class="scenario-card-id">${s.case_id}</span>
+                            <span class="scenario-card-symptom">${s.primary_symptom}</span>
+                        </div>
+                        <div class="scenario-card-fields">
+                            <div>
+                                <label>Gi\u1EDBi t\u00EDnh</label>
+                                <select data-idx="${i}" data-field="gender">
+                                    <option value="nam" ${s.gender === 'nam' ? 'selected' : ''}>Nam</option>
+                                    <option value="n\u1EEF" ${s.gender === 'n\u1EEF' || s.gender === 'nữ' ? 'selected' : ''}>N\u1EEF</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label>Tu\u1ED5i</label>
+                                <input type="number" data-idx="${i}" data-field="age" value="${s.age || ''}" min="0" max="120" />
+                            </div>
+                            <div class="full-width">
+                                <label>Ti\u1EC1n s\u1EED b\u1EC7nh</label>
+                                <input type="text" data-idx="${i}" data-field="medical_history" value="${_escAttr(s.medical_history)}" placeholder="kh\u00F4ng c\u00F3" />
+                            </div>
+                            <div class="full-width">
+                                <label>Thu\u1ED1c \u0111ang u\u1ED1ng</label>
+                                <input type="text" data-idx="${i}" data-field="current_medications" value="${_escAttr(s.current_medications)}" placeholder="kh\u00F4ng c\u00F3" />
+                            </div>
+                            <div class="full-width">
+                                <label>D\u1ECB \u1EE9ng</label>
+                                <input type="text" data-idx="${i}" data-field="allergies" value="${_escAttr(s.allergies)}" placeholder="kh\u00F4ng c\u00F3" />
+                            </div>
+                        </div>
+                    </div>
+                `).join('') + '</div>';
+        }
+
+        function _escAttr(str) {
+            return (str || '').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+        }
+
+        function syncScenariosFromCards() {
+            document.querySelectorAll('.scenario-card-fields [data-idx]').forEach(el => {
+                const idx = parseInt(el.dataset.idx);
+                const field = el.dataset.field;
+                let val = el.value;
+                if (field === 'age') val = parseInt(val) || val;
+                scenarios[idx][field] = val;
+            });
+        }
+
         // ===== START AUTO TEST =====
         async function startAutoTest() {
             if (!scenarios.length) return;
+
+            // Sync edited values from cards
+            syncScenariosFromCards();
 
             isRunning = true;
             isPaused = false;
@@ -774,6 +860,7 @@
 
             return {
                 test_run_id: testRunId,
+                name: document.getElementById('testRunName').value.trim(),
                 timestamp: new Date().toLocaleString('vi-VN'),
                 summary: {
                     total_cases: total,

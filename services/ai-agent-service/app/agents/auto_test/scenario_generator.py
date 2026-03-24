@@ -146,7 +146,9 @@ async def generate_scenarios(
     count: int = 5,
     severity_filter: str = "all",
     topic: str = "all",
+    medical_conditions: str = "",
     reference_content: str = "",
+    randomize_details: bool = True,
 ) -> list[Scenario]:
     """Sinh N kịch bản bệnh nhân qua LLM."""
     reference = reference_content.strip() if reference_content else _build_default_reference()
@@ -158,8 +160,29 @@ async def generate_scenarios(
     if topic_instruction:
         user_content += f"{topic_instruction}\n"
 
+    # Bệnh nền bắt buộc
+    if medical_conditions.strip():
+        user_content += (
+            f"BỆNH NỀN BẮT BUỘC: Tất cả kịch bản phải có medical_history bao gồm \"{medical_conditions.strip()}\".\n"
+            f"Bệnh nhân PHẢI có tiền sử {medical_conditions.strip()} — ghi rõ trong medical_history và patient_history.\n\n"
+        )
+
     if severity_filter != "all":
         user_content += f"Chỉ sinh kịch bản có severity = \"{severity_filter}\".\n"
+
+    # Hướng dẫn về thông tin bệnh nhân
+    if randomize_details:
+        user_content += (
+            "Hãy sinh ngẫu nhiên thông tin bệnh nhân cho mỗi kịch bản:\n"
+            "- gender và age: BẮT BUỘC mỗi case\n"
+            "- medical_history, current_medications, allergies: đa dạng hóa "
+            "(có case không có tiền sử, có case nhiều bệnh nền + thuốc phức tạp)\n\n"
+        )
+    else:
+        user_content += (
+            "gender và age: BẮT BUỘC mỗi case.\n"
+            "Để medical_history, current_medications, allergies = \"không có\" (user sẽ tự điền).\n\n"
+        )
 
     user_content += (
         "Đảm bảo đa dạng về personality và mức độ nặng.\n"
@@ -183,8 +206,11 @@ async def generate_scenarios(
     )
 
     scenarios = _parse_scenarios(response.content)
-    logger.info("scenarios_generated", count=len(scenarios), severity_filter=severity_filter,
-                topic=topic, has_reference_file=bool(reference_content))
+    # LLM có thể sinh nhiều hơn yêu cầu → cắt đúng count
+    scenarios = scenarios[:count]
+    logger.info("scenarios_generated", count=len(scenarios), requested=count,
+                severity_filter=severity_filter, topic=topic,
+                has_reference_file=bool(reference_content))
     return scenarios
 
 

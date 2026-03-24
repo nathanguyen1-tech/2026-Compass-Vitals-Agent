@@ -8,7 +8,12 @@ class Scenario(BaseModel):
     primary_symptom: str
     secondary_symptoms: list[str] = []
     context: str = ""
-    patient_history: str = ""
+    patient_history: str = ""  # backward-compatible tổng hợp
+    gender: str = ""  # "nam" | "nữ"
+    age: int | str = ""  # tuổi
+    medical_history: str = ""  # tiền sử bệnh
+    current_medications: str = ""  # thuốc đang uống
+    allergies: str = ""  # dị ứng
     severity: str = "medium"  # "low" | "medium" | "high" | "critical"
     personality: str = "cooperative"  # "cooperative" | "anxious" | "vague" | "talkative" | "reluctant"
     language_mix: str = "vi"  # "vi" | "en" | "mixed"
@@ -19,7 +24,9 @@ class ScenarioGenerateRequest(BaseModel):
     count: int = Field(default=5, ge=1, le=20)
     severity_filter: str = "all"  # "all" | "low" | "medium" | "high" | "critical"
     topic: str = "all"  # "all" | "sot" | "dau_nguc" | "kho_tho" | ...
+    medical_conditions: str = ""  # bệnh nền bắt buộc: "viêm gan B", "tiểu đường", ...
     reference_content: str = ""  # nội dung file .md kịch bản tham khảo
+    randomize_details: bool = True  # random tiền sử/thuốc/dị ứng
 
 
 class ScenarioGenerateResponse(BaseModel):
@@ -63,6 +70,7 @@ class EvaluateResponse(BaseModel):
 
 class ExportRequest(BaseModel):
     test_run_id: str
+    name: str = ""  # tên do user đặt
     timestamp: str = ""
     summary: dict = {}
     results: list[dict] = []

@@ -16,6 +16,7 @@ async def save_run(
     total_cases: int,
     summary: dict,
     results: list[dict],
+    name: str = "",
 ) -> None:
     """Lưu hoặc cập nhật test run vào DB."""
     async with AsyncSessionLocal() as db:
@@ -28,16 +29,18 @@ async def save_run(
             row.total_cases = total_cases
             row.summary = summary
             row.results = results
+            row.name = name
         else:
             row = AutoTestRunModel(
                 test_run_id=test_run_id,
+                name=name,
                 total_cases=total_cases,
                 summary=summary,
                 results=results,
             )
             db.add(row)
         await db.commit()
-    logger.info("auto_test.saved", run_id=test_run_id, cases=total_cases)
+    logger.info("auto_test.saved", run_id=test_run_id, name=name, cases=total_cases)
 
 
 async def list_runs() -> list[dict]:
@@ -49,6 +52,7 @@ async def list_runs() -> list[dict]:
     return [
         {
             "test_run_id": r.test_run_id,
+            "name": r.name or "",
             "timestamp": r.created_at.isoformat() if r.created_at else "",
             "total_cases": r.total_cases,
             "summary": r.summary or {},
@@ -69,6 +73,7 @@ async def get_run(run_id: str) -> dict | None:
         return None
     return {
         "test_run_id": row.test_run_id,
+        "name": row.name or "",
         "timestamp": row.created_at.isoformat() if row.created_at else "",
         "total_cases": row.total_cases,
         "summary": row.summary or {},

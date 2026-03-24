@@ -11,6 +11,7 @@ class AutoTestRun(Base, TimestampMixin):
 
     id: Mapped[str] = mapped_column(String(26), primary_key=True, default=generate_ulid)
     test_run_id: Mapped[str] = mapped_column(String(50), nullable=False, unique=True, index=True)
+    name: Mapped[str] = mapped_column(String(200), nullable=False, default="")
     total_cases: Mapped[int] = mapped_column(Integer, default=0)
     summary: Mapped[dict] = mapped_column(JSON, default=dict)
     results: Mapped[list] = mapped_column(JSON, default=list)  # list of case results with conversation

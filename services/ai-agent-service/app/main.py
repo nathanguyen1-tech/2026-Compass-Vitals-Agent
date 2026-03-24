@@ -186,6 +186,12 @@ async def log_auto_test_ui():
     return (STATIC_DIR / "log-auto-test.html").read_text(encoding="utf-8")
 
 
+@app.get("/log-auto-test-detail", response_class=HTMLResponse)
+async def log_auto_test_detail_ui():
+    """Serve the Auto Test Run Detail page."""
+    return (STATIC_DIR / "log-auto-test-detail.html").read_text(encoding="utf-8")
+
+
 # Import and register routers after app creation to avoid circular imports
 from app.api.v1.routes import auto_test, chat, chat_v2, flow, logs, patients, sessions, voice_ws  # noqa: E402
 
